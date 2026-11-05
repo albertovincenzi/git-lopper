@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Fake gh for the tests: `auth status` succeeds, and `pr list` prints the
+# "branch<TAB>STATE<TAB>head-sha" lines of $FAKE_GH_DIR/<repo name>
+# (what the real gh prints after its -q filter). FAKE_GH_FAIL=1 makes it fail.
+case "$1 $2" in
+  "auth status") exit 0 ;;
+  "pr list")
+    [ -z "${FAKE_GH_FAIL:-}" ] || exit 1
+    cat "$FAKE_GH_DIR/${PWD##*/}" 2>/dev/null
+    exit 0
+    ;;
+esac
+exit 1
