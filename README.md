@@ -41,7 +41,13 @@ remove — after it checks each one again.
 ## Install
 
 `git-lopper` is a single binary. Put it anywhere on your `PATH`; git then runs it as
-`git lopper`. With Go 1.26 or later:
+`git lopper`. With [Homebrew](https://brew.sh), on macOS or Linux:
+
+```sh
+brew install albertovincenzi/tap/git-lopper
+```
+
+With Go 1.26 or later:
 
 ```sh
 go install github.com/albertovincenzi/git-lopper/cmd/git-lopper@latest

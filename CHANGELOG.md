@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-11-05
 
 ### Added
 
@@ -29,3 +29,5 @@ project uses [Semantic Versioning](https://semver.org/).
 - A single Go binary for macOS and Linux; it checks up to 8 worktrees in parallel.
 - Go unit tests, bats end-to-end tests on real throwaway repositories, CI on Ubuntu
   and macOS.
+
+[0.1.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v0.1.0
