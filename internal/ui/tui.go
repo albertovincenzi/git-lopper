@@ -22,6 +22,7 @@ const (
 	planScreen               // a clean plan, waiting for y
 	pageScreen               // a text to scroll: the help or a plan
 	noteScreen               // a message; any key goes back
+	repoScreen               // the dialog to choose the repository in view
 )
 
 // Model is the interactive app.
@@ -44,6 +45,8 @@ type Model struct {
 	excluded map[string]bool // READY worktrees taken out of the clean
 	chosen   map[string]bool // REVIEW worktrees put in the clean
 	flash    string          // a hint in place of the keys, until the next key
+	repo     string          // the repository in view, or "" for all
+	repoCur  int             // the cursor of the repository dialog
 
 	sizes   map[string]int64 // size on disk by path, measured in the background
 	sizeGen int
@@ -218,6 +221,8 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case noteScreen:
 		m.screen = m.back
+	case repoScreen:
+		m.repoKey(key)
 	}
 	return m, nil
 }
@@ -237,9 +242,17 @@ func (m *Model) homeKey(key string) (tea.Model, tea.Cmd) {
 	case "down", "j", "tab":
 		m.group = (m.group + 1) % len(groups)
 	case "enter", "right", "l":
-		m.openList(m.group)
+		if m.hasScan {
+			m.openList(m.group)
+		}
 	case "1", "2", "3":
-		m.openList(int(key[0] - '1'))
+		if m.hasScan {
+			m.openList(int(key[0] - '1'))
+		}
+	case "r":
+		m.openRepos()
+	case "esc":
+		m.repo = ""
 	}
 	return m, nil
 }
@@ -288,6 +301,8 @@ func (m *Model) listKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.typing = true
 	case "s":
 		m.sortBy = (m.sortBy + 1) % sortOrders
+	case "r":
+		m.openRepos()
 	case "tab":
 		m.openList((m.group + 1) % len(groups))
 	case "shift+tab":
@@ -353,10 +368,10 @@ func (m *Model) toggleAll() {
 	}
 }
 
-// selection is the worktrees that the clean will remove.
+// selection is the worktrees that the clean will remove, in the repository in view.
 func (m *Model) selection() []lopper.Row {
 	var rows []lopper.Row
-	for _, r := range m.saved.Rows {
+	for _, r := range m.rows() {
 		if g := groupOf(r.Class); g == readyGroup && !m.excluded[r.Path] || g == decideGroup && m.chosen[r.Path] {
 			rows = append(rows, r)
 		}

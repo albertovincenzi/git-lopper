@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/albertovincenzi/git-lopper/v2/internal/lopper"
 )
@@ -27,7 +26,7 @@ var sortNames = [sortOrders]string{"oldest first", "largest first", "by reposito
 
 // visible is the list of the open group, searched and sorted.
 func (m *Model) visible() []lopper.Row {
-	rows := lopper.Of(m.saved.Rows, groups[m.group].classes)
+	rows := lopper.Of(m.rows(), groups[m.group].classes)
 	if q := strings.ToLower(m.query); q != "" {
 		rows = slices.DeleteFunc(rows, func(r lopper.Row) bool {
 			return !strings.Contains(strings.ToLower(r.Branch+" "+r.Path+" "+r.Repo+" "+r.Reason), q)
@@ -69,13 +68,17 @@ func (m *Model) isIn(r lopper.Row) bool {
 // sizeText is the size of rows on disk; "…" marks a sum that still grows.
 func (m *Model) sizeText(rows []lopper.Row) string {
 	var n int64
-	all := true
+	measured := 0
 	for _, r := range rows {
-		size, ok := m.sizes[r.Path]
-		n, all = n+size, all && ok
+		if size, ok := m.sizes[r.Path]; ok {
+			n, measured = n+size, measured+1
+		}
 	}
-	if all {
+	switch measured {
+	case len(rows):
 		return humanBytes(n)
+	case 0:
+		return "…"
 	}
 	return humanBytes(n) + "…"
 }
@@ -83,7 +86,7 @@ func (m *Model) sizeText(rows []lopper.Row) string {
 // listView is the box with the worktrees of the open group.
 func (m *Model) listView(l Look, w, h int) string {
 	g, st := groups[m.group], l.group(m.group)
-	all, rows := lopper.Of(m.saved.Rows, g.classes), m.visible()
+	all, rows := lopper.Of(m.rows(), g.classes), m.visible()
 	count := fmt.Sprintf("%d · %s", len(all), m.sizeText(all))
 	if m.group != workGroup {
 		in := slices.DeleteFunc(slices.Clone(all), func(r lopper.Row) bool { return !m.isIn(r) })
@@ -138,7 +141,7 @@ func (m *Model) listLines(l Look, rows []lopper.Row, iw int) (lines []string, at
 		}
 		return fit(s, w) + " "
 	}
-	right := func(s string, w int) string { return strings.Repeat(" ", max(w-ansi.StringWidth(s), 0)) + s }
+	right := alignRight
 	lines = append(lines, l.Faint.Render(strings.Repeat(" ", markW)+col("BRANCH", bw)+col("REPOSITORY", repoW)+
 		col("WHY", whyW)+right("AGE", ageW)+" "+right("SIZE", sizeW)))
 	now, cur := time.Now(), m.cursor(rows)

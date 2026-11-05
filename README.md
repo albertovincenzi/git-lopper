@@ -115,6 +115,7 @@ The home screen shows three groups, with their size on disk and what to do:
 | `↑` `↓` `⏎` `1` `2` `3` | choose a group and open its list |
 | `space` / `a` | select or unselect a worktree / all the ready ones |
 | `/` | search in branch, repository, path and reason |
+| `r` | show one repository: the groups, the lists and the clean then hold only its worktrees; `esc` on the home screen shows all of them again |
 | `s` | on the home screen: scan (`git fetch --prune`, then the PR state); in a list: sort by age, size or repository |
 | `f` | fast scan: no fetch |
 | `c` | clean the selected worktrees: shows the plan and the space it frees, removes only after `y` |

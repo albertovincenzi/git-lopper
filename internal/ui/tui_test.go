@@ -151,14 +151,53 @@ func TestTUIPlanNeedsWorkToConfirm(t *testing.T) {
 	}
 }
 
+func TestTUIRepoFilter(t *testing.T) {
+	m := testModel(t)
+	press(m, "r")
+	if m.screen != repoScreen || !strings.Contains(screenText(m), "all repositories") {
+		t.Fatalf("r does not open the repository dialog:\n%s", screenText(m))
+	}
+	press(m, "down") // the repositories by name: /r/api, /r/web
+	press(m, "enter")
+	if m.screen != homeScreen || m.repo != "/r/api" {
+		t.Fatalf("enter: screen %d repo %q, want home and /r/api", m.screen, m.repo)
+	}
+	if sel := m.selection(); len(sel) != 1 || sel[0].Branch != "feat/login" {
+		t.Fatalf("selection in /r/api: %v, want feat/login only", sel)
+	}
+	out := screenText(m)
+	for _, want := range []string{m.look.Cursor + " /r/api", "1 · 2.0 GB", "c remove 1", "esc all repos"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the home screen in /r/api does not show %q:\n%s", want, out)
+		}
+	}
+	press(m, "1")
+	if rows := m.visible(); len(rows) != 1 || rows[0].Repo != "/r/api" {
+		t.Fatalf("the READY list in /r/api: %v", rows)
+	}
+	m.back, m.screen = listScreen, planScreen
+	m.steps = []lopper.Step{{Action: lopper.Remove, Row: m.saved.Rows[0]}}
+	if !strings.Contains(screenText(m), "only in /r/api") {
+		t.Fatalf("the plan does not say that it holds one repository:\n%s", screenText(m))
+	}
+	m.screen = listScreen
+	press(m, "esc") // the home screen
+	press(m, "esc") // all the repositories
+	if m.repo != "" || len(m.selection()) != 2 {
+		t.Fatalf("esc on the home screen: repo %q, %d selected; want all and 2", m.repo, len(m.selection()))
+	}
+}
+
 func TestTUINoScanYet(t *testing.T) {
 	m := testModel(t)
 	m.saved, m.hasScan = lopper.Saved{}, false
 	if !strings.Contains(screenText(m), "No scan of this folder yet") {
 		t.Fatalf("no welcome without a scan:\n%s", screenText(m))
 	}
-	if cmd := press(m, "c"); cmd != nil || m.screen != homeScreen {
-		t.Fatal("c without a scan starts work")
+	for _, key := range []string{"c", "enter", "1", "r"} {
+		if cmd := press(m, key); cmd != nil || m.screen != homeScreen {
+			t.Fatalf("%s without a scan: screen %d, want the home screen and no work", key, m.screen)
+		}
 	}
 }
 
@@ -197,8 +236,10 @@ func TestTUIFitsTheWindow(t *testing.T) {
 		"note": func() {
 			m.showNote("CLEAN", m.look.Result(lopper.Result{Done: 1, Errors: []string{long + long}}, "/log"))
 		},
-		"help":  func() { m.showPage("HELP", appKeys+Usage("test"), homeScreen) },
-		"flash": func() { m.screen, m.flash = homeScreen, long },
+		"help":   func() { m.showPage("HELP", appKeys+Usage("test"), homeScreen) },
+		"flash":  func() { m.screen, m.flash = homeScreen, long },
+		"repos":  func() { m.back, m.screen, m.repoCur = listScreen, repoScreen, 2 },
+		"scoped": func() { m.screen, m.repo = homeScreen, "/r/"+long },
 	}
 	for _, size := range [][2]int{{30, 12}, {50, 14}, {63, 20}, {80, 24}, {109, 30}, {110, 30}, {160, 50}} {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
@@ -213,7 +254,7 @@ func TestTUIFitsTheWindow(t *testing.T) {
 					t.Errorf("%s at %dx%d: line %d is %d cells wide:\n%s", name, size[0], size[1], i, lipgloss.Width(line), line)
 				}
 			}
-			m.flash, m.typing, m.query = "", false, ""
+			m.flash, m.typing, m.query, m.repo = "", false, "", ""
 		}
 	}
 }

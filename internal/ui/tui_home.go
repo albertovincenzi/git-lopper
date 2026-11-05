@@ -42,7 +42,7 @@ func (m *Model) cards(l Look, w, reasons, blurbs int) string {
 		if h == 0 {
 			h = len(lines) + 2
 		}
-		rows := lopper.Of(m.saved.Rows, groups[g].classes)
+		rows := lopper.Of(m.rows(), groups[g].classes)
 		st := l.group(g)
 		return l.box(frame{title: st.Bold(true).Render(fmt.Sprintf("%d  %s", g+1, groups[g].title)),
 			badge: st.Render(fmt.Sprintf("%d · %s", len(rows), m.sizeText(rows))), lines: lines, w: w, h: h, edge: st, heavy: g == m.group})
@@ -65,7 +65,7 @@ type reasonCount struct {
 
 // cardLines are the description (with blurb), the reasons and the keys of a card, iw cells wide.
 func (m *Model) cardLines(l Look, g, iw, reasons int, blurb bool) []string {
-	rows, st := lopper.Of(m.saved.Rows, groups[g].classes), l.group(g)
+	rows, st := lopper.Of(m.rows(), groups[g].classes), l.group(g)
 	var lines []string
 	if blurb {
 		for line := range strings.Lines(ansi.Wordwrap(groups[g].blurb, iw, "")) {
@@ -119,13 +119,13 @@ func (m *Model) cardKeys(l Look, g int) string {
 	switch g {
 	case readyGroup:
 		in := 0
-		for _, r := range lopper.Of(m.saved.Rows, lopper.Cleanable) {
+		for _, r := range lopper.Of(m.rows(), lopper.Cleanable) {
 			if m.isIn(r) {
 				in++
 			}
 		}
 		keys := key(l.Enter, "see the list") + "   " + key("c", fmt.Sprintf("remove %d after a check", in))
-		if out := len(lopper.Of(m.saved.Rows, lopper.Cleanable)) - in; out > 0 {
+		if out := len(lopper.Of(m.rows(), lopper.Cleanable)) - in; out > 0 {
 			keys += l.Grey.Render(fmt.Sprintf("   %d kept out", out))
 		}
 		return keys
@@ -140,7 +140,7 @@ func (m *Model) cardKeys(l Look, g int) string {
 
 func (m *Model) chosenRows() []lopper.Row {
 	var rows []lopper.Row
-	for _, r := range lopper.Of(m.saved.Rows, []lopper.Class{lopper.Review}) {
+	for _, r := range lopper.Of(m.rows(), []lopper.Class{lopper.Review}) {
 		if m.chosen[r.Path] {
 			rows = append(rows, r)
 		}
@@ -152,5 +152,5 @@ func (m *Model) welcome(l Look, w, h int) string {
 	lines := []string{"", l.Bold.Render("No scan of this folder yet."), "",
 		l.Grey.Render("A scan reads every worktree below this folder. It changes nothing."), "",
 		l.Key("s", "scan") + "   " + l.Key("f", "fast scan, no git fetch"), ""}
-	return dialogBox(l, l.Acc.Bold(true).Render("WELCOME"), lines, w, h, l.Acc)
+	return dialogBox(l, l.Acc.Bold(true).Render("WELCOME"), lines, 0, w, h, l.Acc)
 }

@@ -22,6 +22,9 @@ const appKeys = `The home screen
   c                    remove the selected worktrees: you see a plan first,
                        then y removes them
   s  f                 scan with git fetch, scan without it
+  r                    show one repository: the groups, the lists and the clean
+                       then hold only its worktrees
+  esc                  show all the repositories again
 
 The list
   ↑ ↓  PgUp PgDn       move
@@ -30,6 +33,7 @@ The list
   a                    READY TO REMOVE: all in, or all out
   /                    search in branch, repository, path and reason
   s                    sort: oldest first, largest first, by repository
+  r                    show one repository, or all
   tab                  the next group
   esc                  back to the home screen
 
@@ -95,7 +99,13 @@ func (m *Model) header(l Look, w int) string {
 	}
 	right := sizing + badges
 	need := min(lipgloss.Width(Tilde(m.root)), 24)
-	room := func() int { return w - 2 - lipgloss.Width(logo) - lipgloss.Width(scan) - lipgloss.Width(right) }
+	scope := ""
+	if m.repo != "" {
+		scope = " " + l.Cursor + " " + m.repoName(m.repo)
+	}
+	room := func() int {
+		return w - 2 - lipgloss.Width(logo) - lipgloss.Width(scope) - lipgloss.Width(scan) - lipgloss.Width(right)
+	}
 	if room() < need {
 		right = sizing
 	}
@@ -106,7 +116,7 @@ func (m *Model) header(l Look, w int) string {
 	if old && scan != "" {
 		scanSt, scan = l.Yellow, scan+": old, press s"
 	}
-	left := logo + l.Grey.Render(tail(Tilde(m.root), max(room(), 8))) + scanSt.Render(scan)
+	left := logo + l.Grey.Render(tail(Tilde(m.root), max(room(), 8))) + l.Acc.Bold(true).Render(scope) + scanSt.Render(scan)
 	return fit(left+strings.Repeat(" ", max(w-1-lipgloss.Width(left)-lipgloss.Width(right), 1))+right, w)
 }
 
@@ -138,15 +148,18 @@ func (m *Model) keys(l Look, w int) string {
 	switch m.screen {
 	case homeScreen:
 		hints = []keyHint{{key: l.UpDown, what: "group", off: !m.hasScan}, {key: l.Enter, what: "open", off: !m.hasScan},
-			{key: "c", what: removeN, off: selected == 0}, {key: "s", what: "scan"}, {key: "f", what: "fast scan"},
-			{key: "?", what: "help"}, {key: "q", what: "quit"}}
+			{key: "c", what: removeN, off: selected == 0}, {key: "r", what: "repo", off: !m.hasScan}, {key: "s", what: "scan"},
+			{key: "f", what: "fast scan"}, {key: "?", what: "help"}, {key: "q", what: "quit"}}
+		if m.repo != "" {
+			hints = append(hints[:4], append([]keyHint{{key: "esc", what: "all repos"}}, hints[4:]...)...)
+		}
 	case listScreen:
 		if m.typing {
 			hints = []keyHint{{key: "type", what: "to search"}, {key: l.Enter, what: "done"}, {key: "esc", what: "clear"}}
 			break
 		}
 		hints = []keyHint{{key: l.UpDown, what: "move"}, {key: "space", what: "select", off: m.group == workGroup},
-			{key: "a", what: "all", off: m.group != readyGroup}, {key: "/", what: "search"}, {key: "s", what: "sort"},
+			{key: "a", what: "all", off: m.group != readyGroup}, {key: "/", what: "search"}, {key: "s", what: "sort"}, {key: "r", what: "repo"},
 			{key: "c", what: removeN, off: selected == 0}, {key: "esc", what: "back"}, {key: "?", what: "help"}}
 	case busyScreen:
 		hints = []keyHint{{key: "ctrl+c", what: "stop"}}
@@ -160,6 +173,8 @@ func (m *Model) keys(l Look, w int) string {
 		hints = []keyHint{{key: l.UpDown, what: "scroll"}, {key: "esc", what: "back"}}
 	case noteScreen:
 		hints = []keyHint{{key: "any key", what: "back"}}
+	case repoScreen:
+		hints = []keyHint{{key: l.UpDown, what: "move"}, {key: l.Enter, what: "show"}, {key: "esc", what: "back"}}
 	}
 	var b strings.Builder
 	used := 0
@@ -184,8 +199,17 @@ func (m *Model) keys(l Look, w int) string {
 // dialog is the box of the busy, plan or note screen, at most w×h.
 func (m *Model) dialog(l Look, w, h int) string {
 	var lines []string
+	off := 0
 	title, edge := l.Acc.Bold(true).Render(m.task), l.Acc
 	switch m.screen {
+	case repoScreen:
+		var at int
+		title = l.Acc.Bold(true).Render("SHOW ONE REPOSITORY")
+		lines, at = m.repoLines(l)
+		vis := max(h-2, 1)
+		if off = max(min(at-vis/2, len(lines)-vis), 0); off > 0 && off != at {
+			lines[off] = lines[0] // the column names stay on top
+		}
 	case busyScreen:
 		count := ""
 		if m.prog.total > 0 {
@@ -202,7 +226,7 @@ func (m *Model) dialog(l Look, w, h int) string {
 			lines = append(lines, strings.TrimRight(line, "\n"))
 		}
 	}
-	return dialogBox(l, title, lines, w, h, edge)
+	return dialogBox(l, title, lines, off, w, h, edge)
 }
 
 // planLines tell what the clean will do: removals and the space they free,
@@ -229,6 +253,9 @@ func (m *Model) planLines(l Look) []string {
 	if picked > 0 {
 		lines = append(lines, "  "+l.Yellow.Render(fmt.Sprintf("%d of them you selected in NEEDS YOUR DECISION", picked)))
 	}
+	if m.repo != "" {
+		lines = append(lines, "  "+l.Acc.Render("only in "+m.repoName(m.repo)))
+	}
 	lines = append(lines, "  "+l.Faint.Render("never --force · branches stay · each worktree is checked again"), "")
 	if todo := lopper.Todo(m.steps); todo > 0 {
 		lines = append(lines, "  "+l.Red.Bold(true).Reverse(true).Render(" y ")+" "+l.Red.Render(fmt.Sprintf("remove %d", todo))+
@@ -239,12 +266,12 @@ func (m *Model) planLines(l Look) []string {
 	return lines
 }
 
-// dialogBox frames lines: as wide as the longest line (44 cells at least), at
-// most w-4 wide and h high.
-func dialogBox(l Look, title string, lines []string, w, h int, edge lipgloss.Style) string {
+// dialogBox frames lines from line off: as wide as the longest line (44 cells at
+// least), at most w-4 wide and h high.
+func dialogBox(l Look, title string, lines []string, off, w, h int, edge lipgloss.Style) string {
 	most := 40
 	for _, line := range lines {
 		most = max(most, lipgloss.Width(line))
 	}
-	return l.box(frame{title: title, lines: lines, w: max(min(most+4, w-4), minWidth-4), h: min(len(lines)+2, h), edge: edge})
+	return l.box(frame{title: title, lines: lines, off: off, w: max(min(most+4, w-4), minWidth-4), h: min(len(lines)+2, h), edge: edge})
 }

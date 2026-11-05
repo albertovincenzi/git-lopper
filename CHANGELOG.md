@@ -13,8 +13,8 @@ Version 1 was a bash script. Version 2 is a rewrite in Go.
 - Interactive terminal app: three groups (ready to remove, needs your decision, has your
   work) with the count, the size on disk and what to do for each reason; lists with the
   age and the size of each worktree, search (`/`), sort (`s`), and the next step for the
-  selected worktree; a clean plan with the space it frees; colours for light and dark
-  terminals.
+  selected worktree; a filter by repository (`r`) that also limits the clean; a clean
+  plan with the space it frees; colours for light and dark terminals.
 - In the app, a `REVIEW` worktree is removed only when the user selects it, and only
   while it stays `REVIEW` or becomes cleanable; `KEEP` is never removed.
 - Sizes on disk, measured in the background.

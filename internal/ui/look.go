@@ -154,6 +154,11 @@ func fit(s string, w int) string {
 	return s + strings.Repeat(" ", max(w-ansi.StringWidth(s), 0))
 }
 
+// alignRight pads s (styled or not) on the left to w cells.
+func alignRight(s string, w int) string {
+	return strings.Repeat(" ", max(w-ansi.StringWidth(s), 0)) + s
+}
+
 // tail cuts the start of a path to w cells, so that the folder name stays: "…/code/api".
 func tail(p string, w int) string {
 	if n := ansi.StringWidth(p); n > w {
