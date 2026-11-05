@@ -12,9 +12,12 @@ linked worktree into one of five classes, and removes only the ones that are saf
 remove — after it checks each one again.
 
 ```
- ✂ git lopper  ~/code · 21 worktrees in 2 repos · scanned today 11:47 ✔ gh ✔ in-use
+ ✂ git lopper  ~/code · 21 worktrees in 2 repos · scanned today 14:58 ✔ gh ✔ in-use
 
 ┏━ 1  READY TO REMOVE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8 · 60 KB ━┓
+┃ Their work is in the default branch, or in a merged or closed PR. The branches   ┃
+┃ stay, and git refuses to remove a worktree with changed files.                   ┃
+┃                                                                                  ┃
 ┃    4  in the default branch  44 KB                                               ┃
 ┃    2  PR merged              16 KB                                               ┃
 ┃    2  folder already deleted 0 KB                                                ┃
@@ -22,20 +25,30 @@ remove — after it checks each one again.
 ┃  ⏎  see the list    c  remove 8 after a check                                    ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ╭─ 2  NEEDS YOUR DECISION ───────────────────────────────────────────── 5 · 40 KB ─╮
+│ Their commits are safe in a branch, but you may still use them. Select the ones  │
+│ you do not need.                                                                 │
+│                                                                                  │
 │    1  PR open                wait for the merge                                  │
 │    1  commits not pushed     push them, or remove it                             │
-│    3  for 3 more reasons: see the list                                           │
+│    1  detached HEAD          remove it if not needed                             │
+│    1  never pushed           push it, or remove it                               │
+│    1  no PR                  open a PR, or remove it                             │
 │                                                                                  │
 │ ⏎ see the list and select                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────╯
 ╭─ 3  HAS YOUR WORK ─────────────────────────────────────────────────── 8 · 56 KB ─╮
+│ Changes, commits or operations that exist only here. git lopper never removes    │
+│ them.                                                                            │
+│                                                                                  │
 │    2  changed files          commit, stash or discard                            │
 │    2  commits only here      put them on a branch                                │
-│    4  for 3 more reasons: see the list                                           │
+│    2  locked                 unlock it if not needed                             │
+│    1  rebase or merge        finish or abort it                                  │
+│    1  unpushed commits       push the branch                                     │
 │                                                                                  │
 │ ⏎ see the list                                                                   │
 ╰──────────────────────────────────────────────────────────────────────────────────╯
- ↑↓ group  ⏎ open  c remove 8  s scan  f fast scan  ? help  q quit
+ ↑↓ group  ⏎ open  c remove 8  r repo  s scan  f fast scan  ? help  q quit
 ```
 
 - **One scan for many repositories.** Point it at `~/code` and it finds every repository
