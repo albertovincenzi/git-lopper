@@ -24,6 +24,8 @@ load test_helper
   [ "$(class_of gone)" = REVIEW ]
   [ "$(class_of billing)" = REVIEW ]
   [ "$(class_of idea)" = REVIEW ]
+  [ "$(class_of orphan)" = KEEP ]
+  [ "$(class_of peek)" = REVIEW ]
 }
 
 @test "scan without gh says the PR state is unknown" {
@@ -64,7 +66,7 @@ load test_helper
   lopper scan --no-fetch
   run lopper list --tsv keep
   [ "${lines[0]}" = "$(printf 'class\treason\trepo\tpath\tbranch\tbase\tpr\tpr_head\tupstream\tlast_commit')" ]
-  [ "${#lines[@]}" -eq 8 ]
+  [ "${#lines[@]}" -eq 9 ]
 }
 
 @test "clean --dry-run changes nothing" {
@@ -96,7 +98,7 @@ load test_helper
   run lopper clean PRUNE SAFE LIKELY --yes
   [ "$status" -eq 0 ]
   for d in login deps "with space à" search squashed; do [ ! -e "$W/$d" ]; done
-  for d in typo cache rebasing locked gone billing idea host host/.nested/inner; do [ -d "$W/$d" ]; done
+  for d in typo cache rebasing locked gone billing idea host host/.nested/inner orphan peek; do [ -d "$W/$d" ]; done
   [ -f "$W/host/.nested/inner/work.txt" ]
   contains "holds another repository or worktree"
   # only the planned entries left git's list; the KEEP ones with a missing folder stay

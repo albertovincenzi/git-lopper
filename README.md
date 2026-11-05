@@ -31,8 +31,10 @@ remove — after it checks each one again.
   branch that was squash-merged is not reported as unmerged work.
 - **Safe by design.** No `--force`, no branch deletion, a plan before every removal and a
   fresh check of each worktree right before it goes. See [Safety](#safety).
-- **Interactive or scriptable.** A colour terminal app, plus `scan`, `list` and `clean`
-  commands with `--tsv`, `--dry-run` and `--yes`.
+- **Tells you what to do.** The terminal app puts the worktrees in three groups (ready to
+  remove, needs your decision, has your work), with the size on disk, the age and the next
+  step for each one. For scripts: `scan`, `list` and `clean` with `--tsv`, `--dry-run` and
+  `--yes`.
 - **One binary.** Written in Go: nothing to install but git, and it checks many
   worktrees in parallel.
 
@@ -58,14 +60,22 @@ make install                # into /usr/local/bin; use PREFIX=$HOME/.local for y
 cd ~/code && git lopper       # open the interactive app
 ```
 
+The home screen shows three groups, with their size on disk and what to do:
+
+- **Ready to remove** (`PRUNE`, `SAFE`, `LIKELY`): all selected. Keep one out with `space`.
+- **Needs your decision** (`REVIEW`): none selected. Select the ones you do not need with
+  `space`, one by one.
+- **Has your work** (`KEEP`): never removed. The list says how to save the work.
+
 | Key | Action |
 | --- | --- |
-| `s` | scan: `git fetch --prune` in every repository, then read the PR state |
+| `↑` `↓` `⏎` `1` `2` `3` | choose a group and open its list |
+| `space` / `a` | select or unselect a worktree / all the ready ones |
+| `/` | search in branch, repository, path and reason |
+| `s` | on the home screen: scan (`git fetch --prune`, then the PR state); in a list: sort by age, size or repository |
 | `f` | fast scan: no fetch |
-| `l` | list the worktrees of one class |
-| `c` | clean one class: shows the plan, removes only after `y` |
-| `?` | help |
-| `q` | quit |
+| `c` | clean the selected worktrees: shows the plan and the space it frees, removes only after `y` |
+| `?` / `q` | help / quit |
 
 The same work from a script or a cron job:
 
@@ -88,8 +98,8 @@ look for a man page.
 | `PRUNE` | The folder is gone; only git's metadata is left. | `git worktree remove` on that entry only |
 | `SAFE` | No changes, and `HEAD` is already in the default branch. | `git worktree remove` |
 | `LIKELY` | No changes, no unpushed commits, `HEAD` is on a remote branch or in the PR, and the PR is merged or closed, or the remote branch was deleted (typical after a squash merge). | `git worktree remove` |
-| `KEEP` | Uncommitted changes, unpushed commits, a rebase, merge or bisect in progress, or a locked worktree. A missing folder is `KEEP` too when the entry is locked, or when its detached `HEAD` is the only reference to its commits. | never |
-| `REVIEW` | An open PR, no PR, never pushed, a detached `HEAD`, or a merged PR / deleted remote branch with commits that exist only in this worktree. | never |
+| `KEEP` | Uncommitted changes, unpushed commits, a rebase, merge or bisect in progress, or a locked worktree, or a detached `HEAD` whose commits no branch or tag contains. A missing folder is `KEEP` too when the entry is locked, or when its detached `HEAD` is the only reference to its commits. | never |
+| `REVIEW` | An open PR, no PR, never pushed, a detached `HEAD`, or a merged PR / deleted remote branch with commits that exist only in this worktree. | only in the app, when you select it; `clean REVIEW` is refused |
 
 The default branch is `origin/HEAD` (or the first of `main`, `master`, `develop`, `trunk`
 that exists on the remote). PRs from forks are ignored. Without `gh`, when `gh` is not

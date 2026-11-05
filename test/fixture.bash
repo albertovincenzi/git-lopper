@@ -80,5 +80,10 @@ make_fixture() { # ROOT
   add_wt "$web" chore/space "$w/with space "$'\xc3\xa0'
   # PRUNE: folder deleted by hand
   add_wt "$web" fix/old-css "$w/old-css" && rm -rf "$w/old-css"
+  # KEEP: detached HEAD with a commit that no ref contains
+  git -C "$web" worktree add -q --detach "$w/orphan" 2>/dev/null && commit "$w/orphan" orphan
+  # REVIEW: detached HEAD on a commit of a pushed branch
+  add_wt "$web" feat/peek "$w/peek-branch" && commit "$w/peek-branch" peek && pushed "$w/peek-branch" feat/peek
+  git -C "$web" worktree add -q --detach "$w/peek" feat/peek 2>/dev/null
   : >"$root/.prs/web"
 }

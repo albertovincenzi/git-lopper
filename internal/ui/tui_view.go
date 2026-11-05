@@ -2,9 +2,8 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
-	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -13,20 +12,26 @@ import (
 )
 
 const (
-	sideWidth   = 22 // the classes panel
-	footerLines = 4  // two lines of details, the status line and the keys
-	narrowWidth = 64 // below this width, the classes panel is hidden
-	minWidth    = 30
-	minHeight   = 10
+	minWidth  = 30
+	minHeight = 12
 )
 
-const appKeys = `Keys
-  ↑ ↓  j k  PgUp PgDn  move in the list of worktrees
-  ← →  h l  tab  1-5   change the class
-  c                    clean the class (PRUNE, SAFE or LIKELY): you see the plan,
-                       then y removes the worktrees
+const appKeys = `The home screen
+  ↑ ↓  tab             choose a group
+  ⏎  1 2 3             see the list of a group
+  c                    remove the selected worktrees: you see a plan first,
+                       then y removes them
   s  f                 scan with git fetch, scan without it
-  ?  q                 this help, quit
+
+The list
+  ↑ ↓  PgUp PgDn       move
+  space                READY TO REMOVE: keep a worktree out of the clean, or put it back
+                       NEEDS YOUR DECISION: select a worktree for the clean
+  a                    READY TO REMOVE: all in, or all out
+  /                    search in branch, repository, path and reason
+  s                    sort: oldest first, largest first, by repository
+  tab                  the next group
+  esc                  back to the home screen
 
 `
 
@@ -38,24 +43,27 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) render() string {
-	w, h := m.width, m.height
+	w, h, l := m.width, m.height, m.look
 	if w < minWidth || h < minHeight {
 		return "make the window larger"
 	}
-	l, bodyH := m.look, h-footerLines
-	var body string
+	keys := m.keys(l, w)
 	switch m.screen {
-	case browseScreen:
-		body = m.browser(l, w, bodyH)
-		if !m.hasScan {
-			body = overlay(body, m.noScanBox(l, w, bodyH), w, bodyH)
-		}
+	case homeScreen, listScreen:
+		return m.base(l, m.screen, w, h) + "\n" + keys
 	case pageScreen:
-		body = l.box(l.Bold.Render(m.task), strings.Split(m.page.View(), "\n"), 0, w, bodyH, l.Acc)
-	default:
-		body = overlay(m.browser(l.dim(), w, bodyH), m.dialog(l, w, bodyH), w, bodyH)
+		return m.header(l, w) + "\n" + l.box(frame{title: l.Bold.Render(m.task), lines: strings.Split(m.page.View(), "\n"),
+			w: w, h: h - 2, edge: l.Acc}) + "\n" + keys
 	}
-	return body + "\n" + m.details(l, w) + "\n" + m.status(l, w) + "\n" + m.keys(l, w)
+	return overlay(m.base(l.dim(), m.back, w, h), m.dialog(l, w, h-1), w, h-1) + "\n" + keys
+}
+
+// base is the home or the list screen without the keys: h-1 lines.
+func (m *Model) base(l Look, s screen, w, h int) string {
+	if s == listScreen && m.hasScan {
+		return m.header(l, w) + "\n" + m.listView(l, w, h-5) + "\n" + m.details(l, w)
+	}
+	return m.header(l, w) + "\n\n" + m.home(l, w, h-3)
 }
 
 // overlay puts dialog in the middle of a w×h body.
@@ -64,166 +72,53 @@ func overlay(body, dialog string, w, h int) string {
 	return lipgloss.NewCompositor(lipgloss.NewLayer(body), lipgloss.NewLayer(dialog).X(x).Y(y).Z(1)).Render()
 }
 
-// browser is the classes panel and the list of the selected class; in a narrow window, only the list.
-func (m *Model) browser(l Look, w, h int) string {
-	if !m.hasScan {
-		return lipgloss.Place(w, h, lipgloss.Left, lipgloss.Top, "")
-	}
-	if w < narrowWidth {
-		return m.listBox(l, w, h, true)
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, m.classBox(l, sideWidth, h), m.listBox(l, w-sideWidth, h, false))
-}
-
-func (m *Model) classBox(l Look, w, h int) string {
-	iw := w - 4
-	counts, repos := map[lopper.Class]int{}, map[string]bool{}
-	for _, r := range m.saved.Rows {
-		counts[r.Class]++
-		repos[r.Repo] = true
-	}
-	var lines []string
-	for i, c := range lopper.Classes {
-		st, mark := l.Class(c), "  "
-		if counts[c] == 0 {
-			st = l.Faint
-		}
-		if i == m.class {
-			st, mark = st.Bold(true).Background(l.SelBg), l.Cursor+" "
-		}
-		lines = append(lines, st.Render(fit(fmt.Sprintf("%s%-7s %5d", mark, c, counts[c]), iw)))
-	}
-	cleanable := 0
-	for _, c := range lopper.Cleanable {
-		cleanable += counts[c]
-	}
-	lines = append(lines, "", stack(l, counts, len(m.saved.Rows), iw),
-		l.Grey.Render(fmt.Sprintf("%d worktrees", len(m.saved.Rows))),
-		l.Grey.Render(fmt.Sprintf("%d repos", len(repos))), "",
-		l.Green.Bold(true).Render(fmt.Sprint(cleanable))+l.Grey.Render(" cleanable"))
-	return l.box(l.Bold.Render("Classes"), lines, 0, w, h, l.Faint)
-}
-
-// stack draws one bar with a part for each class, in the class colours.
-func stack(l Look, counts map[lopper.Class]int, total, width int) string {
-	var b strings.Builder
-	sum, from := 0, 0
-	for _, c := range lopper.Classes {
-		sum += counts[c]
-		to := sum * width / max(total, 1)
-		b.WriteString(l.Class(c).Render(strings.Repeat(l.Full, to-from)))
-		from = to
-	}
-	return b.String() + l.Faint.Render(strings.Repeat(l.Empty, width-from))
-}
-
-func (m *Model) listBox(l Look, w, h int, narrow bool) string {
-	c, rows := m.selected(), m.rows()
-	st := l.Class(c)
-	name := st.Bold(true).Render(fmt.Sprintf("%s · %d", c, len(rows)))
-	title := name + l.Grey.Render(" · "+c.Describe())
-	if narrow {
-		title = l.Faint.Render(l.Prev+" ") + name + l.Faint.Render(" "+l.Next)
-	}
-	if len(rows) == 0 {
-		return l.box(title, []string{"", l.Faint.Render("no worktrees in this class")}, 0, w, h, st)
-	}
-	lines, heads, at := m.listLines(l, rows, w-4)
-	vis := h - 2
-	off := max(min(at-vis/3, len(lines)-vis), 0)
-	if off > 0 && off != at && heads[off] != off {
-		lines[off] = lines[heads[off]] // the repository of the first rows shown stays on top
-	}
-	return l.box(title, lines, off, w, h, st)
-}
-
-// listLines draws rows grouped by repository. heads gives, for each line, the
-// line of its repository; at is the line of the selected row.
-func (m *Model) listLines(l Look, rows []lopper.Row, iw int) (lines []string, heads []int, at int) {
-	dw := 5 // MM-DD
-	if iw >= 72 {
-		dw = 10
-	}
-	rw := min(30, iw/3)
-	bw := iw - rw - dw - 4
-	if bw < 12 {
-		rw, bw = 0, iw-dw-3
-	}
-	repo := ""
-	for i, r := range rows {
-		if r.Repo != repo {
-			repo = r.Repo
-			name := filepath.Base(repo)
-			lines = append(lines, l.Bold.Render(name)+" "+l.Faint.Render(tail(Tilde(filepath.Dir(repo)), iw-len(name)-1)))
-			heads = append(heads, len(lines)-1)
-		}
-		heads = append(heads, heads[len(heads)-1])
-		sel := i == m.cursor
-		paint := func(st lipgloss.Style, s string) string {
-			if sel {
-				st = st.Background(l.SelBg)
-			}
-			return st.Render(s)
-		}
-		mark := "  "
-		if sel {
-			mark, at = l.Cursor+" ", len(lines)
-		}
-		date := r.LastCommit
-		if dw == 5 && len(date) == 10 {
-			date = date[5:]
-		}
-		line := paint(l.Acc.Bold(true), mark) + paint(l.Text.Bold(sel), fit(r.Branch, bw)+" ")
-		if rw > 0 {
-			line += paint(l.Class(r.Class), fit(r.Reason, rw)+" ")
-		}
-		lines = append(lines, line+paint(l.Grey, fit(date, dw)))
-	}
-	return lines, heads, at
-}
-
-// details are two lines on the selected worktree: its path, then what the scan found.
-func (m *Model) details(l Look, w int) string {
-	rows := m.rows()
-	if !m.hasScan {
-		return "\n"
-	}
-	if len(rows) == 0 {
-		return " " + l.Grey.Render(fit(m.selected().Describe(), w-1)) + "\n"
-	}
-	r := rows[m.cursor]
-	facts := fmt.Sprintf(" · branch %s · base %s · upstream %s · PR %s · last commit %s", r.Branch, r.Base, r.Upstream, r.PR, r.LastCommit)
-	return " " + fit(l.Bold.Render(tail(Tilde(r.Path), w-1)), w-1) + "\n " +
-		fit(l.Class(r.Class).Render(l.Dot+" "+r.Reason)+l.Grey.Render(facts), w-1)
-}
-
-// status is the name, the folder, the scan time and what works on this system;
-// or a hint. When the window is narrow, it drops the badges, then the time.
-func (m *Model) status(l Look, w int) string {
-	logo := l.Acc.Bold(true).Render(l.Logo+" git lopper") + "  "
-	when, right := "", l.Badge(m.hasGh, "gh")+" "+l.Badge(m.canSee, "in-use")
+// header is the name, the folder, the scan and what works on this system. When
+// the window is narrow, it drops the badges, then the scan.
+func (m *Model) header(l Look, w int) string {
+	logo := " " + l.Acc.Bold(true).Render(l.Logo+" git lopper") + "  "
+	scan, old := "", false
 	if m.hasScan {
-		when = " · scanned " + m.saved.ScannedAt.Format("Mon 02 Jan 15:04")
+		repos := map[string]bool{}
+		for _, r := range m.saved.Rows {
+			repos[r.Repo] = true
+		}
+		scan = fmt.Sprintf(" · %d worktrees in %d repos · %s", len(m.saved.Rows), len(repos), scanned(m.saved.ScannedAt, time.Now()))
+		old = time.Since(m.saved.ScannedAt) > 24*time.Hour
 	}
+	badges := l.Badge(m.hasGh, "gh") + " " + l.Badge(m.canSee, "in-use")
 	if m.hasBloom {
-		right += " " + l.Badge(true, "Bloom")
+		badges += " " + l.Badge(true, "Bloom")
 	}
-	room := func() int { return w - 4 - lipgloss.Width(logo) - len(when) - lipgloss.Width(right) }
-	if room() < 16 {
-		right = ""
+	sizing := ""
+	if m.sized < m.sizeAll {
+		sizing = l.Yellow.Render(fmt.Sprintf("sizes %d/%d", m.sized, m.sizeAll)) + "  "
 	}
-	if room() < 16 {
-		when = ""
+	right := sizing + badges
+	need := min(lipgloss.Width(Tilde(m.root)), 24)
+	room := func() int { return w - 2 - lipgloss.Width(logo) - lipgloss.Width(scan) - lipgloss.Width(right) }
+	if room() < need {
+		right = sizing
 	}
-	left := logo + l.Grey.Render(tail(Tilde(m.root), room())) + l.Faint.Render(when)
-	if m.flash != "" {
-		left = l.Yellow.Bold(true).Render(m.flash)
+	if room() < need {
+		scan = ""
 	}
-	gap := w - 2 - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		return " " + fit(left, w-1)
+	scanSt := l.Faint
+	if old && scan != "" {
+		scanSt, scan = l.Yellow, scan+": old, press s"
 	}
-	return " " + left + strings.Repeat(" ", gap) + right + " "
+	left := logo + l.Grey.Render(tail(Tilde(m.root), max(room(), 8))) + scanSt.Render(scan)
+	return fit(left+strings.Repeat(" ", max(w-1-lipgloss.Width(left)-lipgloss.Width(right), 1))+right, w)
+}
+
+// scanned says when the scan ran: "scanned today 10:05", "scanned Mon 02 Nov".
+func scanned(at, now time.Time) string {
+	switch at.Format(time.DateOnly) {
+	case now.Format(time.DateOnly):
+		return "scanned today " + at.Format("15:04")
+	case now.AddDate(0, 0, -1).Format(time.DateOnly):
+		return "scanned yesterday " + at.Format("15:04")
+	}
+	return "scanned " + at.Format("Mon 02 Jan")
 }
 
 type keyHint struct {
@@ -231,16 +126,28 @@ type keyHint struct {
 	off, danger bool
 }
 
-// keys is the bar of the keys that work on this screen. It drops the last ones when they do not fit.
+// keys is the bar of the keys that work on this screen, or a hint after a key
+// that did nothing. It drops the last keys when they do not fit.
 func (m *Model) keys(l Look, w int) string {
+	if m.flash != "" {
+		return " " + fit(l.Yellow.Bold(true).Render(m.flash), w-1)
+	}
+	selected := len(m.selection())
+	removeN := fmt.Sprintf("remove %d", selected)
 	var hints []keyHint
 	switch m.screen {
-	case browseScreen:
-		c := m.selected()
-		canClean := m.hasScan && slices.Contains(lopper.Cleanable, c) && len(m.rows()) > 0
-		hints = []keyHint{{key: l.UpDown, what: "move", off: !m.hasScan}, {key: l.LeftRight, what: "class", off: !m.hasScan},
-			{key: "c", what: "clean " + string(c), off: !canClean}, {key: "s", what: "scan"}, {key: "f", what: "fast scan"},
+	case homeScreen:
+		hints = []keyHint{{key: l.UpDown, what: "group", off: !m.hasScan}, {key: l.Enter, what: "open", off: !m.hasScan},
+			{key: "c", what: removeN, off: selected == 0}, {key: "s", what: "scan"}, {key: "f", what: "fast scan"},
 			{key: "?", what: "help"}, {key: "q", what: "quit"}}
+	case listScreen:
+		if m.typing {
+			hints = []keyHint{{key: "type", what: "to search"}, {key: l.Enter, what: "done"}, {key: "esc", what: "clear"}}
+			break
+		}
+		hints = []keyHint{{key: l.UpDown, what: "move"}, {key: "space", what: "select", off: m.group == workGroup},
+			{key: "a", what: "all", off: m.group != readyGroup}, {key: "/", what: "search"}, {key: "s", what: "sort"},
+			{key: "c", what: removeN, off: selected == 0}, {key: "esc", what: "back"}, {key: "?", what: "help"}}
 	case busyScreen:
 		hints = []keyHint{{key: "ctrl+c", what: "stop"}}
 	case planScreen:
@@ -274,12 +181,6 @@ func (m *Model) keys(l Look, w int) string {
 	return b.String()
 }
 
-func (m *Model) noScanBox(l Look, w, h int) string {
-	lines := []string{"", l.Bold.Render("No scan of this folder yet."), "",
-		l.Key("s", "scan") + "   " + l.Key("f", "fast scan, no git fetch"), ""}
-	return dialogBox(l, l.Acc.Bold(true).Render("WELCOME"), lines, w, h, l.Acc)
-}
-
 // dialog is the box of the busy, plan or note screen, at most w×h.
 func (m *Model) dialog(l Look, w, h int) string {
 	var lines []string
@@ -294,18 +195,7 @@ func (m *Model) dialog(l Look, w, h int) string {
 		lines = []string{m.spin.View() + " " + m.detail, "",
 			l.gradBar(m.prog.done, m.prog.total, bw-len(count)) + l.Bold.Render(count), l.Grey.Render(fit(m.prog.label, bw))}
 	case planScreen:
-		for line := range strings.Lines(l.PlanSummary(m.steps, m.planSees)) {
-			lines = append(lines, strings.TrimPrefix(strings.TrimRight(line, "\n"), "  "))
-		}
-		lines = append(lines, "", l.Faint.Render("  never --force · branches stay · each worktree is checked again"), "")
-		if todo := lopper.Todo(m.steps); todo > 0 {
-			lines = append(lines, "  "+l.Red.Bold(true).Reverse(true).Render(" y ")+" "+l.Red.Render(fmt.Sprintf("remove %d", todo))+
-				"   "+l.Key("v", "view plan")+"   "+l.Key("esc", "back"))
-		} else {
-			lines = append(lines, "  "+l.Grey.Render("nothing to remove"))
-		}
-		st := l.Class(m.picked)
-		title, edge = st.Bold(true).Render("CLEAN "+string(m.picked)), st
+		lines = m.planLines(l)
 	default:
 		title = l.Acc.Bold(true).Render(m.noteHead)
 		for line := range strings.Lines(strings.Trim(m.note, "\n")) {
@@ -315,6 +205,40 @@ func (m *Model) dialog(l Look, w, h int) string {
 	return dialogBox(l, title, lines, w, h, edge)
 }
 
+// planLines tell what the clean will do: removals and the space they free,
+// skips by reason, and the keys.
+func (m *Model) planLines(l Look) []string {
+	var lines []string
+	for line := range strings.Lines(l.PlanSummary(m.steps, m.planSees)) {
+		lines = append(lines, strings.TrimPrefix(strings.TrimRight(line, "\n"), "  "))
+	}
+	var going []string
+	picked := 0
+	for _, s := range m.steps {
+		if s.Action != lopper.Skip {
+			going = append(going, s.Row.Path)
+			if s.Row.Class == lopper.Review {
+				picked++
+			}
+		}
+	}
+	lines = append(lines, "")
+	if free := m.sizeOf(going); free > 0 {
+		lines = append(lines, "  "+l.Green.Bold(true).Render("frees "+humanBytes(free)))
+	}
+	if picked > 0 {
+		lines = append(lines, "  "+l.Yellow.Render(fmt.Sprintf("%d of them you selected in NEEDS YOUR DECISION", picked)))
+	}
+	lines = append(lines, "  "+l.Faint.Render("never --force · branches stay · each worktree is checked again"), "")
+	if todo := lopper.Todo(m.steps); todo > 0 {
+		lines = append(lines, "  "+l.Red.Bold(true).Reverse(true).Render(" y ")+" "+l.Red.Render(fmt.Sprintf("remove %d", todo))+
+			"   "+l.Key("v", "view plan")+"   "+l.Key("esc", "back"))
+	} else {
+		lines = append(lines, "  "+l.Grey.Render("nothing to remove"))
+	}
+	return lines
+}
+
 // dialogBox frames lines: as wide as the longest line (44 cells at least), at
 // most w-4 wide and h high.
 func dialogBox(l Look, title string, lines []string, w, h int, edge lipgloss.Style) string {
@@ -322,5 +246,5 @@ func dialogBox(l Look, title string, lines []string, w, h int, edge lipgloss.Sty
 	for _, line := range lines {
 		most = max(most, lipgloss.Width(line))
 	}
-	return l.box(title, lines, 0, max(min(most+4, w-4), minWidth-4), min(len(lines)+2, h), edge)
+	return l.box(frame{title: title, lines: lines, w: max(min(most+4, w-4), minWidth-4), h: min(len(lines)+2, h), edge: edge})
 }

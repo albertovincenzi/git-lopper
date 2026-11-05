@@ -58,6 +58,12 @@ func Inspect(t Target) (class Class, reason, upstream string) {
 		f.OnRemote = onRemote(t.Path, head, t.PRHead)
 	}
 	class, reason = Classify(f)
+	// without a branch, a commit that no ref contains is lost with the worktree
+	if class != Keep && t.Branch == detached {
+		if head, err := git(t.Path, "rev-parse", "HEAD"); err != nil || !reachable(t.Path, head) {
+			return Keep, "detached commits only here", f.Upstream
+		}
+	}
 	return class, reason, f.Upstream
 }
 

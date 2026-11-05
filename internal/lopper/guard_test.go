@@ -69,6 +69,52 @@ func TestInspectUnreadableIsNotMissing(t *testing.T) {
 	}
 }
 
+func TestAccepts(t *testing.T) {
+	user := append([]Class{Review}, Cleanable...) // the app, with REVIEW worktrees picked
+	tests := []struct {
+		name      string
+		wanted    []Class
+		was, now  Class
+		wantMayGo bool
+	}{
+		{"SAFE stays SAFE", []Class{Safe}, Safe, Safe, true},
+		{"SAFE became LIKELY, only SAFE wanted", []Class{Safe}, Safe, Likely, false},
+		{"SAFE became KEEP", Cleanable, Safe, Keep, false},
+		{"SAFE became REVIEW, REVIEW picked elsewhere", user, Safe, Review, false},
+		{"REVIEW not picked", Cleanable, Review, Review, false},
+		{"REVIEW picked, still REVIEW", user, Review, Review, true},
+		{"REVIEW picked, now LIKELY", user, Review, Likely, true},
+		{"REVIEW picked, now KEEP", user, Review, Keep, false},
+		{"KEEP asked for by mistake", []Class{Keep}, Keep, Keep, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := accepts(tt.wanted, tt.was, tt.now); got != tt.wantMayGo {
+				t.Errorf("accepts(%v, %s, %s) = %v, want %v", tt.wanted, tt.was, tt.now, got, tt.wantMayGo)
+			}
+		})
+	}
+}
+
+func TestDiskSize(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a"), make([]byte, 100_000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sub", "b"), make([]byte, 50_000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DiskSize(dir); got < 150_000 || got > 400_000 {
+		t.Errorf("DiskSize = %d, want about 150 kB", got)
+	}
+	if got := DiskSize(filepath.Join(dir, "missing")); got != 0 {
+		t.Errorf("DiskSize of a missing folder = %d, want 0", got)
+	}
+}
+
 func TestGuardsSeeThisProcess(t *testing.T) {
 	if !CanSeeProcesses() {
 		t.Skip("no lsof and no /proc")

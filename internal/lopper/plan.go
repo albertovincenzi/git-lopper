@@ -40,13 +40,28 @@ func Decide(wanted []Class, r Row, g Guards) (Action, string) {
 	}
 	// not locked: git itself refuses a locked worktree
 	class, reason, _ := Inspect(Target{Repo: r.Repo, Path: r.Path, Branch: r.Branch, Base: r.Base, PR: r.PR, PRHead: r.PRHead, Head: "-"})
-	if !slices.Contains(wanted, class) {
+	if !accepts(wanted, r.Class, class) {
 		return Skip, fmt.Sprintf("changed since the scan (now %s: %s)", class, reason)
 	}
 	if why := nested(r.Path); why != "" {
 		return Skip, why
 	}
 	return Remove, reason
+}
+
+// accepts reports whether a worktree that the scan found in class was, and that
+// is in class now right before the removal, may go. KEEP never goes. A REVIEW
+// worktree goes only when REVIEW is wanted (the user picked it), also when it
+// has become cleanable since. Any other worktree goes only when its class now is
+// wanted, and never when it has become REVIEW.
+func accepts(wanted []Class, was, now Class) bool {
+	switch {
+	case now == Keep:
+		return false
+	case was == Review:
+		return slices.Contains(wanted, Review) && (now == Review || slices.Contains(Cleanable, now))
+	}
+	return now != Review && slices.Contains(wanted, now)
 }
 
 // MakePlan decides what to do with each row of a wanted class.

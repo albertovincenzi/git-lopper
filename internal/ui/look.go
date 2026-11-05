@@ -23,8 +23,9 @@ type Look struct {
 	Grad  [2]color.Color // the two ends of the progress bar
 
 	Dot, OK, Pause, Fail, Full, Empty, Rule, Logo      string
-	Side, Thumb, Cursor, Prev, Next, UpDown, LeftRight string
-	Corners                                            [4]string // top left, top right, bottom left, bottom right
+	Side, Thumb, Cursor, UpDown, On, Off, Arrow, Enter string
+	HeavyRule, HeavySide                               string
+	Corners, HeavyCorners                              [4]string // top left, top right, bottom left, bottom right
 }
 
 // palette is a set of ANSI 256 colours: accent, grey, faint, green, cyan,
@@ -50,13 +51,14 @@ func newLook(dark bool) Look {
 		Green: fg(p[3]), Cyan: fg(p[4]), Yellow: fg(p[5]), Red: fg(p[6]),
 		SelBg: lipgloss.Color(p[7]), Grad: [2]color.Color{lipgloss.Color(p[0]), lipgloss.Color(p[8])},
 		Dot: "*", OK: "+", Pause: "-", Fail: "x", Full: "#", Empty: ".", Rule: "-", Logo: ">8",
-		Side: "|", Thumb: "#", Cursor: ">", Prev: "<", Next: ">", UpDown: "j/k", LeftRight: "h/l",
-		Corners: [4]string{"+", "+", "+", "+"},
+		Side: "|", Thumb: "#", Cursor: ">", UpDown: "j/k", On: "x", Off: "-", Arrow: "->", Enter: "enter", HeavyRule: "=", HeavySide: "#",
+		Corners: [4]string{"+", "+", "+", "+"}, HeavyCorners: [4]string{"#", "#", "#", "#"},
 	}
 	if utf8Locale() {
 		l.Dot, l.OK, l.Pause, l.Fail, l.Full, l.Empty, l.Rule, l.Logo = "●", "✔", "⏸", "✖", "█", "░", "─", "✂"
-		l.Side, l.Thumb, l.Cursor, l.Prev, l.Next, l.UpDown, l.LeftRight = "│", "┃", "›", "‹", "›", "↑↓", "←→"
-		l.Corners = [4]string{"╭", "╮", "╰", "╯"}
+		l.Side, l.Thumb, l.Cursor, l.UpDown, l.On, l.Off, l.HeavyRule, l.HeavySide = "│", "┃", "›", "↑↓", "✔", "○", "━", "┃"
+		l.Arrow, l.Enter = "→", "⏎"
+		l.Corners, l.HeavyCorners = [4]string{"╭", "╮", "╰", "╯"}, [4]string{"┏", "┓", "┗", "┛"}
 	}
 	return l
 }
@@ -160,15 +162,33 @@ func tail(p string, w int) string {
 	return p
 }
 
-// box draws lines in a w×h frame, with title in the top edge and the frame in
-// the edge style. With more lines than room, off is the first line shown, and
-// the right edge shows where the view is.
-func (l Look) box(title string, lines []string, off, w, h int, edge lipgloss.Style) string {
+// frame is a box of w×h cells: a title on the left of the top edge, a badge on
+// its right, and lines inside. With more lines than room, off is the first line
+// shown, and the right edge shows where the view is.
+type frame struct {
+	title, badge string
+	lines        []string
+	off, w, h    int
+	edge         lipgloss.Style
+	heavy        bool // a thick border, for the selected box
+}
+
+func (l Look) box(f frame) string {
+	title, badge, lines, off, w, h, edge := f.title, f.badge, f.lines, f.off, f.w, f.h, f.edge
+	corners, rule, side := l.Corners, l.Rule, l.Side
+	if f.heavy {
+		corners, rule, side = l.HeavyCorners, l.HeavyRule, l.HeavySide
+	}
 	iw, vis := w-4, h-2
-	title = ansi.Truncate(title, max(iw-1, 0), "…")
-	tw := ansi.StringWidth(title)
+	title = ansi.Truncate(title, max(iw-2, 0), "…")
+	if badge != "" && ansi.StringWidth(title)+ansi.StringWidth(badge)+4 <= iw {
+		badge = " " + badge + " "
+	} else {
+		badge = ""
+	}
+	fill := max(w-ansi.StringWidth(title)-ansi.StringWidth(badge)-6, 0)
 	var b strings.Builder
-	b.WriteString(edge.Render(l.Corners[0]+l.Rule+" ") + title + edge.Render(" "+strings.Repeat(l.Rule, max(w-tw-5, 0))+l.Corners[1]) + "\n")
+	b.WriteString(edge.Render(corners[0]+rule+" ") + title + edge.Render(" "+strings.Repeat(rule, fill)) + badge + edge.Render(rule+corners[1]) + "\n")
 	thumbFrom, thumbTo := -1, -1
 	if len(lines) > vis && vis > 0 {
 		size := max(vis*vis/len(lines), 1)
@@ -180,13 +200,13 @@ func (l Look) box(title string, lines []string, off, w, h int, edge lipgloss.Sty
 		if j := off + i; j < len(lines) {
 			line = lines[j]
 		}
-		right := edge.Render(l.Side)
+		right := edge.Render(side)
 		if i >= thumbFrom && i < thumbTo {
 			right = edge.Render(l.Thumb)
 		}
-		b.WriteString(edge.Render(l.Side) + " " + fit(line, iw) + " " + right + "\n")
+		b.WriteString(edge.Render(side) + " " + fit(line, iw) + " " + right + "\n")
 	}
-	b.WriteString(edge.Render(l.Corners[2] + strings.Repeat(l.Rule, w-2) + l.Corners[3]))
+	b.WriteString(edge.Render(corners[2] + strings.Repeat(rule, w-2) + corners[3]))
 	return b.String()
 }
 
