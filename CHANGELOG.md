@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.2.0] - 2026-11-05
 
 ### Changed
 
@@ -12,6 +12,13 @@ project uses [Semantic Versioning](https://semver.org/).
   which agents use it, with the agents on this computer selected. It knows 13 agents:
   Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Amp, Cline, Windsurf,
   Goose, Kiro CLI, Roo Code and Junie. Agents that read the same folder share one copy.
+- The plan of `clean` lists the files that git ignores in each worktree it removes, such as
+  `.env` and keys: `git worktree remove` deletes them too.
+
+### Fixed
+
+- A worktree with edits to a file marked `assume-unchanged` or `skip-worktree` was `SAFE`,
+  because `git status` hides those edits, and `clean` deleted them. It is `KEEP` now.
 
 ## [2.1.0] - 2026-11-05
 
@@ -62,7 +69,7 @@ Version 1 was a bash script. Version 2 is a rewrite in Go.
 - Go unit tests, bats end-to-end tests on real throwaway repositories, CI on Ubuntu
   and macOS.
 
-[Unreleased]: https://github.com/albertovincenzi/git-lopper/compare/v2.1.0...HEAD
+[2.2.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.2.0
 [2.1.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.1.0
 [2.0.1]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.0.1
 [2.0.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.0.0
