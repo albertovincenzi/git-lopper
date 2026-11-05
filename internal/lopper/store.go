@@ -1,7 +1,7 @@
 package lopper
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -75,7 +75,7 @@ var ErrNoScan = errors.New("no saved scan")
 
 // ScanPath is where the scan of root is saved.
 func (c Config) ScanPath(root string) string {
-	sum := sha1.Sum([]byte(root))
+	sum := sha256.Sum256([]byte(root))
 	return filepath.Join(c.CacheDir, hex.EncodeToString(sum[:])+".json")
 }
 

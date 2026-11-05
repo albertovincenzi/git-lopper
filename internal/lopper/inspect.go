@@ -134,7 +134,8 @@ func missing(path string) bool {
 }
 
 // command makes a command that is killed after limit; call cancel when done.
+// Every caller passes a fixed program name, and no shell runs the arguments.
 func command(limit time.Duration, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
-	return exec.CommandContext(ctx, name, args...), cancel
+	return exec.CommandContext(ctx, name, args...), cancel // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 }

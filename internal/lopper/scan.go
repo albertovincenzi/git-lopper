@@ -141,6 +141,9 @@ type entry struct {
 }
 
 // parsePorcelain reads the output of `git worktree list --porcelain`.
+//
+// shortcut: a path with a newline breaks this line format, and then git worktree
+// remove refuses the cut path; use --porcelain -z when git 2.36 is the minimum.
 func parsePorcelain(out string) []entry {
 	var list []entry
 	e := entry{head: "-"}

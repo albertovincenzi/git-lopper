@@ -1,6 +1,9 @@
 package lopper
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestClassify(t *testing.T) {
 	tests := []struct {
@@ -113,4 +116,22 @@ func TestParsePorcelain(t *testing.T) {
 			t.Errorf("entry %d = %+v, want %+v", i, got[i], want[i])
 		}
 	}
+}
+
+// parsePorcelain reads text from git: it must never panic, and every entry must
+// come from one "worktree " line.
+func FuzzParsePorcelain(f *testing.F) {
+	f.Add("worktree /r\nHEAD abc\nbranch refs/heads/main\n\nworktree /w\nHEAD def\ndetached\nlocked why\n")
+	f.Add("worktree \n\nworktree /a b\tc\"d\nbranch refs/heads/x\n")
+	f.Fuzz(func(t *testing.T, out string) {
+		list := parsePorcelain(out)
+		if len(list) > strings.Count(out, "worktree ") {
+			t.Fatalf("%d entries from %d worktree lines", len(list), strings.Count(out, "worktree "))
+		}
+		for _, e := range list {
+			if e.path == "" || strings.Contains(e.path, "\n") {
+				t.Fatalf("bad path %q", e.path)
+			}
+		}
+	})
 }

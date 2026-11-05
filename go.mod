@@ -1,6 +1,6 @@
 module github.com/albertovincenzi/git-lopper/v2
 
-go 1.26.0
+go 1.26.10
 
 require (
 	charm.land/bubbles/v2 v2.2.1
