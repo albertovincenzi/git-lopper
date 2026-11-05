@@ -1,61 +1,91 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/albertovincenzi/git-lopper/internal/lopper"
 )
 
+// press sends a key: a printable one ("q") or a named one ("down", "right").
 func press(m *Model, key string) tea.Cmd {
-	_, cmd := m.Update(tea.KeyPressMsg{Code: []rune(key)[0], Text: key})
+	named := map[string]rune{"down": tea.KeyDown, "up": tea.KeyUp, "right": tea.KeyRight, "left": tea.KeyLeft, "esc": tea.KeyEscape}
+	msg := tea.KeyPressMsg{Code: []rune(key)[0], Text: key}
+	if code, ok := named[key]; ok {
+		msg = tea.KeyPressMsg{Code: code}
+	}
+	_, cmd := m.Update(msg)
 	return cmd
 }
+
+// screenText is the screen without colours.
+func screenText(m *Model) string { return ansi.Strip(m.render()) }
 
 func testModel(t *testing.T) *Model {
 	t.Helper()
 	cfg := lopper.Config{Depth: 3, CacheDir: t.TempDir(), BloomDB: "/nonexistent"}
 	m := NewModel(cfg, t.TempDir(), "test")
-	m.saved, m.hasScan = lopper.Saved{Rows: []lopper.Row{
-		{Class: lopper.Safe, Reason: "already in the default branch", Repo: "/r/api", Path: "/w/login", Branch: "feat/login", LastCommit: "-"},
+	m.setScan(lopper.Saved{Rows: []lopper.Row{
+		{Class: lopper.Safe, Reason: "already in the default branch", Repo: "/r/api", Path: "/w/login", Branch: "feat/login", LastCommit: "2026-10-30"},
+		{Class: lopper.Safe, Reason: "already in the default branch", Repo: "/r/web", Path: "/w/deps", Branch: "chore/deps", LastCommit: "-"},
 		{Class: lopper.Keep, Reason: "1 changed file", Repo: "/r/api", Path: "/w/typo", Branch: "fix/typo", LastCommit: "-"},
-	}}, true
+	}})
 	return m
 }
 
-func TestTUIListAndBack(t *testing.T) {
+func TestTUIBrowse(t *testing.T) {
 	m := testModel(t)
-	if !strings.Contains(m.render(), "2 worktrees in 1 repos") {
-		t.Fatalf("the dashboard does not show the scan:\n%s", m.render())
+	if m.selected() != lopper.Safe {
+		t.Fatalf("the app opens on %s, want the first class with worktrees (SAFE)", m.selected())
 	}
-	press(m, "l")
-	if m.screen != pickScreen || len(m.choices) != len(lopper.Classes) {
-		t.Fatalf("l: screen %d with %d choices, want the pick screen with all classes", m.screen, len(m.choices))
+	out := screenText(m)
+	for _, want := range []string{"Classes", "SAFE · 2", "feat/login", "chore/deps", "/w/login", "2 cleanable"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the first screen does not show %q:\n%s", want, out)
+		}
 	}
-	press(m, "2") // SAFE
-	if m.screen != pageScreen || !strings.Contains(m.render(), "feat/login") || strings.Contains(m.render(), "fix/typo") {
-		t.Fatalf("2: want the list of SAFE only, got:\n%s", m.render())
+	press(m, "down")
+	if m.cursor != 1 || !strings.Contains(screenText(m), "/w/deps") {
+		t.Fatalf("down: cursor %d, want the details of the second worktree", m.cursor)
 	}
-	press(m, "q")
-	if m.screen != dashScreen {
-		t.Fatalf("q on a page: screen %d, want the dashboard", m.screen)
+	press(m, "down") // stays on the last row
+	press(m, "right")
+	press(m, "right")
+	if m.selected() != lopper.Keep || m.cursor != 0 || !strings.Contains(screenText(m), "fix/typo") {
+		t.Fatalf("right twice: class %s cursor %d, want KEEP and the first row", m.selected(), m.cursor)
+	}
+	press(m, "1")
+	if m.selected() != lopper.Prune || !strings.Contains(screenText(m), "no worktrees in this class") {
+		t.Fatalf("1: class %s, want an empty PRUNE list", m.selected())
+	}
+	press(m, "left") // wraps to the last class
+	if m.selected() != lopper.Review {
+		t.Fatalf("left from the first class: %s, want REVIEW", m.selected())
 	}
 	if cmd := press(m, "q"); cmd == nil || cmd() != tea.Quit() {
-		t.Fatal("q on the dashboard does not quit")
+		t.Fatal("q does not quit")
 	}
 }
 
-func TestTUICleanOffersOnlyCleanableClasses(t *testing.T) {
+func TestTUICleanRefusesKeepAndReview(t *testing.T) {
 	m := testModel(t)
-	press(m, "c")
-	if m.screen != pickScreen || len(m.choices) != len(lopper.Cleanable) {
-		t.Fatalf("c: screen %d with %d choices, want the pick screen with the cleanable classes", m.screen, len(m.choices))
-	}
-	press(m, "9")
-	if m.screen != dashScreen {
-		t.Fatalf("a wrong number: screen %d, want the dashboard", m.screen)
+	for _, key := range []string{"4", "5"} {
+		press(m, key)
+		if cmd := press(m, "c"); cmd != nil || m.screen != browseScreen {
+			t.Fatalf("c on %s starts work", m.selected())
+		}
+		if !strings.Contains(screenText(m), "is never cleaned") {
+			t.Fatalf("c on %s gives no hint:\n%s", m.selected(), screenText(m))
+		}
+		press(m, "j") // any key clears the hint
+		if m.flash != "" {
+			t.Fatal("the hint stays after the next key")
+		}
 	}
 }
 
@@ -63,16 +93,71 @@ func TestTUIPlanNeedsWorkToConfirm(t *testing.T) {
 	m := testModel(t)
 	m.picked, m.screen = lopper.Safe, planScreen
 	m.steps = []lopper.Step{{Action: lopper.Skip, Reason: "in use by a running process", Row: m.saved.Rows[0]}}
-	if cmd := press(m, "y"); cmd != nil || m.screen != dashScreen {
-		t.Fatalf("y with nothing to remove: screen %d, want the dashboard and no work", m.screen)
+	if !strings.Contains(screenText(m), "nothing to remove") {
+		t.Fatalf("a plan without removals does not say so:\n%s", screenText(m))
+	}
+	if cmd := press(m, "y"); cmd != nil || m.screen != browseScreen {
+		t.Fatalf("y with nothing to remove: screen %d, want the browser and no work", m.screen)
 	}
 }
 
 func TestTUINoScanYet(t *testing.T) {
 	m := testModel(t)
-	m.hasScan = false
-	press(m, "l")
-	if m.screen != dashScreen || !strings.Contains(m.render(), "No scan yet") {
-		t.Fatalf("l without a scan: screen %d, want the dashboard with a hint", m.screen)
+	m.saved, m.hasScan = lopper.Saved{}, false
+	if !strings.Contains(screenText(m), "No scan of this folder yet") {
+		t.Fatalf("no welcome without a scan:\n%s", screenText(m))
+	}
+	if cmd := press(m, "c"); cmd != nil || m.screen != browseScreen {
+		t.Fatal("c without a scan starts work")
+	}
+}
+
+func TestTUIKeepsTheRepositoryOnTop(t *testing.T) {
+	m := testModel(t)
+	for i := range 30 {
+		m.saved.Rows = append(m.saved.Rows, lopper.Row{Class: lopper.Likely, Reason: "PR merged", Repo: "/r/big", Path: fmt.Sprint("/w/b", i), Branch: fmt.Sprint("feat/b", i)})
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 16})
+	press(m, "3")
+	for range 20 {
+		press(m, "down")
+	}
+	top := strings.Split(screenText(m), "\n")[1]
+	if !strings.Contains(top, "big") || strings.Contains(top, "feat/b") {
+		t.Fatalf("after scrolling, the first line of the list is %q, want the repository", top)
+	}
+}
+
+// Every screen fills the window exactly: no line is wider, and there is one line per row.
+func TestTUIFitsTheWindow(t *testing.T) {
+	m := testModel(t)
+	long := strings.Repeat("very-long-branch-name/", 8)
+	m.saved.Rows = append(m.saved.Rows, lopper.Row{Class: lopper.Safe, Reason: strings.Repeat("reason ", 10), Repo: "/r/" + long,
+		Path: "/w/" + long + "à", Branch: long, LastCommit: "2026-11-05"})
+	m.steps = []lopper.Step{{Action: lopper.Remove, Reason: "already in the default branch", Row: m.saved.Rows[0]}}
+	m.picked = lopper.Safe
+	screens := map[string]func(){
+		"browse": func() { m.screen = browseScreen },
+		"busy":   func() { m.screen, m.task, m.detail, m.prog = busyScreen, "SCAN", "no fetch", progressMsg{3, 7, long} },
+		"plan":   func() { m.screen = planScreen },
+		"note": func() {
+			m.showNote("CLEAN SAFE", m.look.Result(lopper.Result{Done: 1, Errors: []string{long + long}}, "/log"))
+		},
+		"help": func() { m.showPage("HELP", appKeys+Usage("test"), browseScreen) },
+	}
+	for _, size := range [][2]int{{30, 10}, {50, 14}, {63, 20}, {64, 20}, {80, 24}, {160, 50}} {
+		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		for name, show := range screens {
+			show()
+			lines := strings.Split(m.render(), "\n")
+			if len(lines) != size[1] {
+				t.Errorf("%s at %dx%d: %d lines, want %d", name, size[0], size[1], len(lines), size[1])
+			}
+			for i, line := range lines {
+				if lipgloss.Width(line) > size[0] {
+					t.Errorf("%s at %dx%d: line %d is %d cells wide:\n%s", name, size[0], size[1], i, lipgloss.Width(line), line)
+				}
+			}
+		}
 	}
 }

@@ -49,7 +49,7 @@ Or from a clone:
 
 ```sh
 git clone https://github.com/albertovincenzi/git-lopper && cd git-lopper
-make install                # into /usr/local/bin; use PREFIX=~/.local for your home
+make install                # into /usr/local/bin; use PREFIX=$HOME/.local for your home
 ```
 
 ## Usage

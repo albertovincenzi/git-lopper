@@ -8,7 +8,9 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Interactive terminal app: dashboard, list, clean with a plan, help.
+- Interactive terminal app: the classes and the worktrees of one class side by side,
+  arrow keys, the details of the selected worktree, a clean plan to confirm, colours
+  for light and dark terminals, and a single-list layout for narrow windows.
 - `scan`, `list` (with `--tsv`) and `clean` (with `--dry-run` and `--yes`) commands.
 - Five classes: `PRUNE`, `SAFE`, `LIKELY`, `KEEP`, `REVIEW`, with PR state from `gh`.
 - Safety: no `--force`, branches are kept, every worktree is checked again before

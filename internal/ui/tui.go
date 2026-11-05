@@ -2,12 +2,12 @@ package ui
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
-	"strings"
 
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
@@ -17,16 +17,12 @@ import (
 type screen int
 
 const (
-	dashScreen screen = iota
-	pickScreen        // choose a class to list or clean
-	busyScreen        // a scan, plan or clean runs
-	planScreen        // a clean plan, waiting for y
-	pageScreen        // a text to scroll: list, plan or help
-	noteScreen        // a message; any key goes back to the dashboard
+	browseScreen screen = iota // the classes and the worktrees of one class
+	busyScreen                 // a scan, plan or clean runs
+	planScreen                 // a clean plan, waiting for y
+	pageScreen                 // a text to scroll: the help or a plan
+	noteScreen                 // a message; any key goes back
 )
-
-// header is the logo line, the rule and the scan info, with blank lines around.
-const headerLines = 5
 
 // Model is the interactive app.
 type Model struct {
@@ -39,14 +35,18 @@ type Model struct {
 	hasScan bool
 
 	screen   screen
-	cleaning bool // the pick screen is for clean, else for list
-	choices  []lopper.Class
+	class    int    // the selected class: an index in lopper.Classes
+	cursor   int    // the selected worktree of that class
+	flash    string // a hint in the status line, until the next key
 	picked   lopper.Class
-	title    string // of the busy and page screens
+	task     string // the busy or page title
+	detail   string // what the busy task does
 	prog     progressMsg
+	spin     spinner.Model
 	steps    []lopper.Step
 	planSees bool // the in-use check worked for this plan
 	note     string
+	noteHead string
 	page     viewport.Model
 	pageBack screen
 	events   chan tea.Msg
@@ -81,12 +81,17 @@ func NewModel(cfg lopper.Config, root, version string) *Model {
 	_, dbErr := os.Stat(cfg.BloomDB)
 	m := &Model{cfg: cfg, root: root, version: version, look: NewLook(),
 		hasGh: ghErr == nil, canSee: lopper.CanSeeProcesses(), hasBloom: dbErr == nil, width: 80, height: 24}
+	sp := spinner.Line
+	if utf8Locale() {
+		sp = spinner.Dot
+	}
+	m.spin = spinner.New(spinner.WithSpinner(sp), spinner.WithStyle(m.look.Acc))
 	saved, err := lopper.Load(cfg.ScanPath(root))
 	switch {
 	case err == nil:
-		m.saved, m.hasScan = saved, true
+		m.setScan(saved)
 	case !errors.Is(err, lopper.ErrNoScan):
-		m.note, m.screen = m.look.Red.Render("  "+err.Error())+"\n", noteScreen
+		m.showNote("ERROR", m.look.Red.Render(err.Error()))
 	}
 	return m
 }
@@ -97,39 +102,51 @@ func RunTUI(cfg lopper.Config, root, version string) error {
 	return err
 }
 
-// Init starts nothing: the app waits for a key.
-func (m *Model) Init() tea.Cmd { return nil }
+// Init asks the terminal for its background colour, to pick the light or dark palette.
+func (m *Model) Init() tea.Cmd { return tea.RequestBackgroundColor }
 
 // Update handles keys, the window size and the messages of background work.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		m.look = newLook(msg.IsDark())
+		m.spin.Style = m.look.Acc
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.page.SetWidth(msg.Width)
-		m.page.SetHeight(m.pageHeight())
+		m.page.SetWidth(m.width - 4)
+		m.page.SetHeight(m.listHeight())
+	case spinner.TickMsg:
+		if m.screen == busyScreen {
+			var cmd tea.Cmd
+			m.spin, cmd = m.spin.Update(msg)
+			return m, cmd
+		}
 	case progressMsg:
 		m.prog = msg
 		return m, m.wait()
 	case scanDoneMsg:
-		m.screen = dashScreen
+		m.screen = browseScreen
 		if msg.err == nil {
-			m.saved, m.hasScan = msg.saved, true
+			m.setScan(msg.saved)
 		}
 		if note := errOr(msg.err, msg.warn); note != "" {
-			m.note, m.screen = "  "+m.look.Yellow.Render(note)+"\n", noteScreen
+			m.showNote("SCAN", m.look.Yellow.Render(note))
 		}
 	case planDoneMsg:
 		m.steps, m.planSees, m.screen = msg.steps, msg.seesProcesses, planScreen
 	case cleanDoneMsg:
-		m.saved, m.screen = msg.saved, noteScreen
-		m.note = m.look.Result(msg.res, m.cfg.LogPath())
+		m.saved = msg.saved
+		m.cursor = max(min(m.cursor, len(m.rows())-1), 0)
+		note := m.look.Result(msg.res, m.cfg.LogPath())
 		if msg.err != nil {
-			m.note += "  " + m.look.Red.Render(msg.err.Error()) + "\n"
+			note += m.look.Red.Render(msg.err.Error())
 		}
+		m.showNote("CLEAN "+string(m.picked), note)
 	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
+		m.flash = ""
 		return m.key(msg)
 	}
 	return m, nil
@@ -142,38 +159,32 @@ func errOr(err error, warn string) string {
 	return warn
 }
 
+// setScan shows a scan. When the selected class is empty, it selects the first class with worktrees.
+func (m *Model) setScan(s lopper.Saved) {
+	m.saved, m.hasScan = s, true
+	for i := 0; len(m.rows()) == 0 && i < len(lopper.Classes); i++ {
+		m.class = i
+	}
+	if len(m.rows()) == 0 {
+		m.class = 0
+	}
+	m.cursor = max(min(m.cursor, len(m.rows())-1), 0)
+}
+
+func (m *Model) selected() lopper.Class { return lopper.Classes[m.class] }
+
+// rows are the worktrees of the selected class.
+func (m *Model) rows() []lopper.Row { return lopper.Of(m.saved.Rows, []lopper.Class{m.selected()}) }
+
+// listHeight is the number of lines inside the panels.
+func (m *Model) listHeight() int { return max(m.height-footerLines-2, 1) }
+
 func (m *Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := k.String()
 	switch m.screen {
 	case busyScreen: // only ctrl+c stops background work
-	case dashScreen:
-		switch key {
-		case "q":
-			return m, tea.Quit
-		case "s", "f":
-			return m, m.startScan(key == "s")
-		case "l", "c":
-			if m.hasScan {
-				m.cleaning, m.screen = key == "c", pickScreen
-				m.choices = lopper.Classes
-				if m.cleaning {
-					m.choices = lopper.Cleanable
-				}
-			}
-		case "?":
-			m.showPage("HELP", Usage(m.version), dashScreen)
-		}
-	case pickScreen:
-		i, err := strconv.Atoi(key)
-		if err != nil || i < 1 || i > len(m.choices) {
-			m.screen = dashScreen
-			break
-		}
-		m.picked = m.choices[i-1]
-		if m.cleaning {
-			return m, m.startPlan()
-		}
-		m.showPage("LIST "+string(m.picked), m.look.List(lopper.Of(m.saved.Rows, []lopper.Class{m.picked})), dashScreen)
+	case browseScreen:
+		return m.browseKey(key)
 	case planScreen:
 		todo := lopper.Todo(m.steps)
 		switch {
@@ -182,11 +193,11 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case key == "v" && todo > 0:
 			m.showPage("PLAN "+string(m.picked), m.look.Plan(m.steps), planScreen)
 		default:
-			m.screen = dashScreen
+			m.screen = browseScreen
 		}
 	case pageScreen:
 		switch key {
-		case "q", "b", "esc", "left":
+		case "q", "b", "esc", "left", "h":
 			m.screen = m.pageBack
 		default:
 			var cmd tea.Cmd
@@ -194,22 +205,81 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	case noteScreen:
-		m.screen = dashScreen
+		m.screen = browseScreen
 	}
 	return m, nil
 }
 
-func (m *Model) pageHeight() int { return max(m.height-headerLines-3, 3) }
+func (m *Model) browseKey(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "q":
+		return m, tea.Quit
+	case "s", "f":
+		return m, m.startScan(key == "s")
+	case "c":
+		return m, m.clean()
+	case "?":
+		m.showPage("HELP", appKeys+Usage(m.version), browseScreen)
+	case "left", "h", "shift+tab":
+		m.setClass(m.class - 1)
+	case "right", "l", "tab":
+		m.setClass(m.class + 1)
+	case "up", "k":
+		m.cursor--
+	case "down", "j":
+		m.cursor++
+	case "pgup":
+		m.cursor -= m.listHeight()
+	case "pgdown":
+		m.cursor += m.listHeight()
+	case "home", "g":
+		m.cursor = 0
+	case "end", "G":
+		m.cursor = len(m.rows()) - 1
+	default:
+		if i, err := strconv.Atoi(key); err == nil && i >= 1 && i <= len(lopper.Classes) {
+			m.setClass(i - 1)
+		}
+	}
+	m.cursor = max(min(m.cursor, len(m.rows())-1), 0)
+	return m, nil
+}
+
+func (m *Model) setClass(i int) {
+	n := len(lopper.Classes)
+	m.class, m.cursor = (i%n+n)%n, 0
+}
+
+// clean starts the plan for the selected class, or says why it cannot.
+func (m *Model) clean() tea.Cmd {
+	c := m.selected()
+	switch {
+	case !m.hasScan:
+		m.flash = "no scan yet: press s"
+	case !slices.Contains(lopper.Cleanable, c):
+		m.flash = string(c) + " is never cleaned"
+	case len(m.rows()) == 0:
+		m.flash = "no " + string(c) + " worktrees to clean"
+	default:
+		m.picked = c
+		return m.startPlan()
+	}
+	return nil
+}
 
 func (m *Model) showPage(title, text string, back screen) {
-	m.page = viewport.New(viewport.WithWidth(m.width), viewport.WithHeight(m.pageHeight()))
+	m.page = viewport.New(viewport.WithWidth(m.width-4), viewport.WithHeight(m.listHeight()))
 	m.page.SetContent(text)
-	m.title, m.pageBack, m.screen = title, back, pageScreen
+	m.task, m.pageBack, m.screen = title, back, pageScreen
+}
+
+func (m *Model) showNote(head, text string) {
+	m.noteHead, m.note, m.screen = head, text, noteScreen
 }
 
 // start runs job in the background; its progress and its result come back as messages.
-func (m *Model) start(title string, job func(report lopper.Progress) tea.Msg) tea.Cmd {
-	m.screen, m.title, m.prog = busyScreen, title, progressMsg{}
+func (m *Model) start(task, detail string, job func(report lopper.Progress) tea.Msg) tea.Cmd {
+	m.screen, m.task, m.detail, m.prog = busyScreen, task, detail, progressMsg{}
 	events := make(chan tea.Msg, 64)
 	m.events = events
 	go func() {
@@ -220,7 +290,7 @@ func (m *Model) start(title string, job func(report lopper.Progress) tea.Msg) te
 			}
 		})
 	}()
-	return m.wait()
+	return tea.Batch(m.wait(), m.spin.Tick)
 }
 
 func (m *Model) wait() tea.Cmd {
@@ -229,12 +299,12 @@ func (m *Model) wait() tea.Cmd {
 }
 
 func (m *Model) startScan(fetch bool) tea.Cmd {
-	title := "SCAN  no fetch, PR state from gh"
+	detail := "no fetch, PR state from gh"
 	if fetch {
-		title = "SCAN  git fetch --prune, then PR state from gh"
+		detail = "git fetch --prune, then PR state from gh"
 	}
 	cfg, root := m.cfg, m.root
-	return m.start(title, func(report lopper.Progress) tea.Msg {
+	return m.start("SCAN", detail, func(report lopper.Progress) tea.Msg {
 		saved, warn, err := cfg.ScanAndSave(root, fetch, report)
 		return scanDoneMsg{saved, warn, err}
 	})
@@ -242,7 +312,7 @@ func (m *Model) startScan(fetch bool) tea.Cmd {
 
 func (m *Model) startPlan() tea.Cmd {
 	cfg, rows, wanted := m.cfg, m.saved.Rows, []lopper.Class{m.picked}
-	return m.start("CLEAN "+string(m.picked)+"  checking every worktree", func(report lopper.Progress) tea.Msg {
+	return m.start("CLEAN "+string(m.picked), "checking every worktree again", func(report lopper.Progress) tea.Msg {
 		guards := lopper.LoadGuards(cfg.BloomDB, cfg.BloomDir)
 		return planDoneMsg{lopper.MakePlan(wanted, rows, guards, report), guards.SeesProcesses()}
 	})
@@ -250,75 +320,8 @@ func (m *Model) startPlan() tea.Cmd {
 
 func (m *Model) startClean() tea.Cmd {
 	cfg, root, saved, steps, wanted := m.cfg, m.root, m.saved, m.steps, []lopper.Class{m.picked}
-	return m.start("CLEAN "+string(m.picked)+"  removing", func(report lopper.Progress) tea.Msg {
+	return m.start("CLEAN "+string(m.picked), "removing, one worktree at a time", func(report lopper.Progress) tea.Msg {
 		res, saved, err := cfg.Clean(root, saved, wanted, steps, report)
 		return cleanDoneMsg{res, err, saved}
 	})
-}
-
-// View draws the header and the current screen on the alternate screen.
-func (m *Model) View() tea.View {
-	v := tea.NewView(m.render())
-	v.AltScreen = true
-	return v
-}
-
-func (m *Model) render() string {
-	var b strings.Builder
-	b.WriteString(m.header())
-	l := m.look
-	switch m.screen {
-	case dashScreen:
-		if m.hasScan {
-			b.WriteString(l.Summary(m.saved.Rows, m.width))
-		} else {
-			b.WriteString("  " + l.Yellow.Render("No scan yet.") + " Press " + l.Key("s", "scan") + " to start.\n")
-		}
-		b.WriteString("\n  " + strings.Join([]string{l.Key("s", "scan"), l.Key("f", "fast scan"), l.Key("l", "list"),
-			l.Key("c", "clean"), l.Key("?", "help"), l.Key("q", "quit")}, "   ") + "\n")
-	case pickScreen:
-		if m.cleaning {
-			b.WriteString("  " + l.Bold.Render("CLEAN") + "  which class?  " + l.Grey.Render("(KEEP and REVIEW are never cleaned)") + "\n\n")
-		} else {
-			b.WriteString("  " + l.Bold.Render("LIST") + "  which class?\n\n")
-		}
-		for i, c := range m.choices {
-			fmt.Fprintf(&b, "    %s  %s %s %s\n", l.Bold.Render(strconv.Itoa(i+1)), l.Class(c).Render(l.Dot),
-				l.Bold.Render(fmt.Sprintf("%-7s", c)), l.Grey.Render(c.Describe()))
-		}
-		b.WriteString("\n  " + l.Grey.Render("pick a number · any other key: back") + "\n")
-	case busyScreen:
-		b.WriteString("  " + l.Bold.Render(m.title) + "\n\n" + l.Progress(m.prog.done, m.prog.total, m.prog.label, m.width) + "\n")
-	case planScreen:
-		b.WriteString("  " + l.Bold.Render("CLEAN") + "  " + l.Class(m.picked).Bold(true).Render(string(m.picked)) + "\n\n")
-		b.WriteString(l.PlanSummary(m.steps, m.planSees))
-		if todo := lopper.Todo(m.steps); todo > 0 {
-			b.WriteString("\n  " + l.Key("y", fmt.Sprintf("remove %d", todo)) + "   " + l.Key("v", "view plan") + "   " + l.Key("b", "back") + "\n")
-		} else {
-			b.WriteString("\n  nothing to remove.  " + l.Grey.Render("any key: back") + "\n")
-		}
-	case pageScreen:
-		b.WriteString("  " + l.Bold.Render(m.title) + "\n" + m.page.View() + "\n  " + l.Grey.Render("↑/↓ scroll · q back") + "\n")
-	case noteScreen:
-		b.WriteString(m.note + "\n  " + l.Grey.Render("press any key") + "\n")
-	}
-	return b.String()
-}
-
-func (m *Model) header() string {
-	l := m.look
-	info := "no scan yet"
-	if m.hasScan {
-		repos := map[string]bool{}
-		for _, r := range m.saved.Rows {
-			repos[r.Repo] = true
-		}
-		info = fmt.Sprintf("%d worktrees in %d repos · scanned %s", len(m.saved.Rows), len(repos), m.saved.ScannedAt.Format("Mon 02 Jan 15:04"))
-	}
-	badges := l.Badge(m.hasGh, "gh") + " " + l.Badge(m.canSee, "in-use")
-	if m.hasBloom {
-		badges += " " + l.Badge(true, "Bloom")
-	}
-	return "\n  " + l.Acc.Bold(true).Render(l.Logo+"  GIT LOPPER") + "  " + l.Grey.Render(Tilde(m.root)) + "   " + badges +
-		"\n  " + l.Faint.Render(strings.Repeat(l.Rule, 66)) + "\n  " + l.Grey.Render(info) + "\n\n"
 }
