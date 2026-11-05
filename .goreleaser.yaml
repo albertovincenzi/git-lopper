@@ -13,6 +13,14 @@ archives:
   - formats: [tar.gz]
     files: [LICENSE, README.md, CHANGELOG.md]
 
+# A keyless Sigstore signature of the checksum file, made with the identity of the
+# release workflow. The checksum file covers every archive.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args: [sign-blob, "--bundle=${signature}", "${artifact}", --yes]
+    artifacts: checksum
+
 # shortcut: 'brews' is deprecated in favour of 'homebrew_casks', but a cask needs
 # an Apple signature or an xattr hook that turns off Gatekeeper; a formula does
 # not. Move to 'homebrew_casks' when the binaries are signed, or when GoReleaser v3

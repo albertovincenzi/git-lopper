@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- A Sigstore signature of the checksum file in each release, made by the release
+  workflow without a key. The README shows how to check a download with `cosign`.
+
 ## [2.0.0] - 2026-11-05
 
 Version 1 was a bash script. Version 2 is a rewrite in Go.
@@ -34,4 +41,5 @@ Version 1 was a bash script. Version 2 is a rewrite in Go.
 - Go unit tests, bats end-to-end tests on real throwaway repositories, CI on Ubuntu
   and macOS.
 
+[Unreleased]: https://github.com/albertovincenzi/git-lopper/compare/v2.0.0...HEAD
 [2.0.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.0.0

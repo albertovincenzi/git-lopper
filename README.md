@@ -82,7 +82,17 @@ brew install albertovincenzi/tap/git-lopper
 
 Or download the archive for your system from the
 [releases](https://github.com/albertovincenzi/git-lopper/releases), and put `git-lopper`
-on your `PATH`.
+on your `PATH`. Each release after 2.0.0 has a Sigstore signature of its checksum file.
+To check a download with [cosign](https://github.com/sigstore/cosign):
+
+```sh
+v=2.0.1   # the version you downloaded
+cosign verify-blob \
+  --certificate-identity "https://github.com/albertovincenzi/git-lopper/.github/workflows/release.yml@refs/tags/v$v" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --bundle "git-lopper_${v}_checksums.txt.sigstore.json" "git-lopper_${v}_checksums.txt"
+shasum -a 256 --check --ignore-missing "git-lopper_${v}_checksums.txt"
+```
 
 With Go 1.26 or later:
 
