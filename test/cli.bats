@@ -190,6 +190,14 @@ load test_helper
   [ -f "$CLAUDE_CONFIG_DIR/skills/git-lopper/SKILL.md" ]
 
   run lopper install-skill cursor
+  [ "$status" -eq 0 ]
+  [ -f "$HOME/.cursor/skills/git-lopper/SKILL.md" ]
+
+  run lopper install-skill codex cline
+  [ "$status" -eq 0 ]
+  contains "for Codex, Cline:"
+
+  run lopper install-skill notepad
   [ "$status" -eq 2 ]
-  contains "unknown agent: cursor"
+  contains "unknown agent: notepad"
 }

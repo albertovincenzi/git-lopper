@@ -160,18 +160,50 @@ look for a man page.
 
 ## AI agents
 
-`git lopper install-skill` teaches Claude Code and Codex to use the commands above. With
-the skill, the agent scans, reports each class, shows the `--dry-run` plan, and runs
-`clean --yes` only after you agree to that plan.
+`git lopper install-skill` installs a skill that teaches coding agents to use the
+commands above. With the skill, the agent scans, reports each class, shows the
+`--dry-run` plan, and runs `clean --yes` only after you agree to that plan.
 
-```sh
-git lopper install-skill         # for each agent on this machine (~/.claude, ~/.codex)
-git lopper install-skill codex   # or name one: claude, codex
+In a terminal, it asks where the skill goes (your user, for every project, or the
+current repository, to commit and share with your team) and which agents use it. The
+agents on this computer are selected for you:
+
+```
+✔ Where should the skill go? your user
+Which agents should use it?
+› ✔ Claude Code     found  ~/.claude/skills
+  ✔ Codex           found  ~/.agents/skills
+  ○ Cursor                 ~/.cursor/skills
+  ○ Gemini CLI             ~/.gemini/skills
+  …
+↑↓ move  space select  a all  ⏎ install  esc cancel
 ```
 
-It writes `~/.claude/skills/git-lopper/SKILL.md` (under `$CLAUDE_CONFIG_DIR` when it is
-set) for Claude Code, and `~/.agents/skills/git-lopper/SKILL.md` for Codex. Run it again
-after an upgrade. Then ask the agent, for example: "which worktrees in ~/code can I remove?"
+From a script, name the agents. The skill then goes to their user folders:
+
+```sh
+git lopper install-skill claude codex
+```
+
+| Agent | Name | User folder | Repository folder |
+| --- | --- | --- | --- |
+| Claude Code | `claude` | `~/.claude/skills` (`$CLAUDE_CONFIG_DIR/skills` when set) | `.claude/skills` |
+| Codex | `codex` | `~/.agents/skills` | `.agents/skills` |
+| Cursor | `cursor` | `~/.cursor/skills` | `.agents/skills` |
+| Gemini CLI | `gemini` | `~/.gemini/skills` | `.agents/skills` |
+| GitHub Copilot | `copilot` | `~/.copilot/skills` | `.agents/skills` |
+| OpenCode | `opencode` | `~/.config/opencode/skills` | `.agents/skills` |
+| Amp | `amp` | `~/.config/agents/skills` | `.agents/skills` |
+| Cline | `cline` | `~/.agents/skills` | `.agents/skills` |
+| Windsurf | `windsurf` | `~/.codeium/windsurf/skills` | `.windsurf/skills` |
+| Goose | `goose` | `~/.config/goose/skills` | `.goose/skills` |
+| Kiro CLI | `kiro` | `~/.kiro/skills` | `.kiro/skills` |
+| Roo Code | `roo` | `~/.roo/skills` | `.roo/skills` |
+| Junie | `junie` | `~/.junie/skills` | `.junie/skills` |
+
+Agents that read the same folder share one copy. Outside a terminal and without names,
+the skill goes to the user folder of every agent on this computer. Run it again after an
+upgrade. Then ask the agent, for example: "which worktrees in ~/code can I remove?"
 
 ## Classes
 

@@ -89,7 +89,7 @@ func run(argv []string) int {
 		return 0
 	}
 	if o.command == "install-skill" {
-		return installSkill(o.args)
+		return installSkill(o.args, isTerminal(os.Stdin) && isTerminal(os.Stdout))
 	}
 	if _, err := exec.LookPath("git"); err != nil {
 		return fail(errors.New("git is not installed"))

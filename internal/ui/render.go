@@ -19,7 +19,8 @@ Usage:
   git lopper [options] list [CLASS...]    print the saved scan (--tsv for raw rows)
   git lopper [options] clean CLASS...     remove PRUNE, SAFE or LIKELY worktrees
                                           (--dry-run to preview, --yes to skip the prompt)
-  git lopper install-skill [claude|codex] teach Claude Code or Codex to use these commands
+  git lopper install-skill [AGENT...]     teach coding agents to use these commands
+                                          (asks where and for which agents, or name them)
 Options:
   -C, --root DIR   folder that holds your repositories (default: current folder)
   -d, --depth N    how deep to look for repositories (default: 3)

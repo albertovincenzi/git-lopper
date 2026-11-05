@@ -15,6 +15,11 @@ import (
 
 // press sends a key: a printable one ("q") or a named one ("down", "enter").
 func press(m *Model, key string) tea.Cmd {
+	_, cmd := m.Update(keyMsg(key))
+	return cmd
+}
+
+func keyMsg(key string) tea.KeyPressMsg {
 	named := map[string]rune{"down": tea.KeyDown, "up": tea.KeyUp, "right": tea.KeyRight, "left": tea.KeyLeft,
 		"esc": tea.KeyEscape, "enter": tea.KeyEnter, "tab": tea.KeyTab, "space": tea.KeySpace, "backspace": tea.KeyBackspace}
 	msg := tea.KeyPressMsg{Code: []rune(key)[0], Text: key}
@@ -24,8 +29,7 @@ func press(m *Model, key string) tea.Cmd {
 			msg.Text = " "
 		}
 	}
-	_, cmd := m.Update(msg)
-	return cmd
+	return msg
 }
 
 func typeText(m *Model, text string) {
