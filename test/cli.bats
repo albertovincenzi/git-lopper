@@ -165,3 +165,31 @@ load test_helper
   [ "$status" -eq 2 ]
   contains "takes no arguments"
 }
+
+@test "install-skill writes the skill for each agent it finds, or for the one named" {
+  export HOME=$BATS_TEST_TMPDIR/home CLAUDE_CONFIG_DIR='' CODEX_HOME=''
+  mkdir -p "$HOME"
+  run lopper install-skill
+  [ "$status" -eq 2 ]
+  contains "name one"
+
+  mkdir -p "$HOME/.claude"
+  run lopper install-skill
+  [ "$status" -eq 0 ]
+  grep -q '^name: git-lopper$' "$HOME/.claude/skills/git-lopper/SKILL.md"
+  [ ! -e "$HOME/.agents" ]
+
+  run lopper install-skill codex
+  [ "$status" -eq 0 ]
+  contains "Codex"
+  grep -q '^name: git-lopper$' "$HOME/.agents/skills/git-lopper/SKILL.md"
+
+  export CLAUDE_CONFIG_DIR=$BATS_TEST_TMPDIR/claude-work
+  run lopper install-skill claude
+  [ "$status" -eq 0 ]
+  [ -f "$CLAUDE_CONFIG_DIR/skills/git-lopper/SKILL.md" ]
+
+  run lopper install-skill cursor
+  [ "$status" -eq 2 ]
+  contains "unknown agent: cursor"
+}

@@ -88,6 +88,9 @@ func run(argv []string) int {
 		fmt.Printf("git-lopper %s\n", version)
 		return 0
 	}
+	if o.command == "install-skill" {
+		return installSkill(o.args)
+	}
 	if _, err := exec.LookPath("git"); err != nil {
 		return fail(errors.New("git is not installed"))
 	}

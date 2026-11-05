@@ -145,6 +145,21 @@ git lopper -C ~/code clean SAFE PRUNE --yes     # remove without a prompt
 and `2` on a usage error. Use `git lopper -h` for help: `git lopper --help` makes git
 look for a man page.
 
+## AI agents
+
+`git lopper install-skill` teaches Claude Code and Codex to use the commands above. With
+the skill, the agent scans, reports each class, shows the `--dry-run` plan, and runs
+`clean --yes` only after you agree to that plan.
+
+```sh
+git lopper install-skill         # for each agent on this machine (~/.claude, ~/.codex)
+git lopper install-skill codex   # or name one: claude, codex
+```
+
+It writes `~/.claude/skills/git-lopper/SKILL.md` (under `$CLAUDE_CONFIG_DIR` when it is
+set) for Claude Code, and `~/.agents/skills/git-lopper/SKILL.md` for Codex. Run it again
+after an upgrade. Then ask the agent, for example: "which worktrees in ~/code can I remove?"
+
 ## Classes
 
 | Class | Meaning | Cleaned by |
