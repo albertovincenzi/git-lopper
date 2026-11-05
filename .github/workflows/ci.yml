@@ -12,7 +12,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: make lint
 
   test:
@@ -22,7 +22,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # the tests and the tool run with the first bash on PATH: on macOS, make it
       # the bash 3.2 that ships with the system, not a newer one from Homebrew
       - name: Use the macOS bash 3.2

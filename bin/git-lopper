@@ -517,7 +517,7 @@ clean_screen() {
 }
 
 tui() {
-  [ -t 0 ] && [ -t 1 ] || die "the interactive app needs a terminal (see -h for commands)"
+  if [ ! -t 0 ] || [ ! -t 1 ]; then die "the interactive app needs a terminal (see -h for commands)"; fi
   IN_TUI=1
   tput smcup 2>/dev/null
   trap 'exit 130' INT
