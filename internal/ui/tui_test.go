@@ -10,7 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/albertovincenzi/git-lopper/internal/lopper"
+	"github.com/albertovincenzi/git-lopper/v2/internal/lopper"
 )
 
 // press sends a key: a printable one ("q") or a named one ("down", "enter").

@@ -7,7 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/albertovincenzi/git-lopper/internal/lopper"
+	"github.com/albertovincenzi/git-lopper/v2/internal/lopper"
 )
 
 // The three groups of the home screen, in plain words.

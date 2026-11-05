@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/albertovincenzi/git-lopper/internal/lopper"
+	"github.com/albertovincenzi/git-lopper/v2/internal/lopper"
 )
 
 // Usage is the help text.

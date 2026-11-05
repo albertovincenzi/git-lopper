@@ -12,12 +12,12 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"github.com/albertovincenzi/git-lopper/internal/lopper"
-	"github.com/albertovincenzi/git-lopper/internal/ui"
+	"github.com/albertovincenzi/git-lopper/v2/internal/lopper"
+	"github.com/albertovincenzi/git-lopper/v2/internal/ui"
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
-var version = "0.1.0"
+var version = "2.0.0"
 
 func main() { os.Exit(run(os.Args[1:])) }
 

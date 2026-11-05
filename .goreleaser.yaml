@@ -1,0 +1,39 @@
+version: 2
+
+builds:
+  - main: ./cmd/git-lopper
+    binary: git-lopper
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+
+archives:
+  - formats: [tar.gz]
+    files: [LICENSE, README.md, CHANGELOG.md]
+
+# shortcut: 'brews' is deprecated in favour of 'homebrew_casks', but a cask needs
+# an Apple signature or an xattr hook that turns off Gatekeeper; a formula does
+# not. Move to 'homebrew_casks' when the binaries are signed, or when GoReleaser v3
+# removes 'brews' (the release workflow stays on v2).
+brews:
+  - repository:
+      owner: albertovincenzi
+      name: homebrew-tap
+      git:
+        url: git@github.com:albertovincenzi/homebrew-tap.git
+        private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY }}"
+    directory: Formula
+    homepage: https://github.com/albertovincenzi/git-lopper
+    description: Find stale git worktrees in all your repositories and remove them safely
+    license: MIT
+    install: |
+      bin.install "git-lopper"
+    test: |
+      system "git", "init", "-q", "-b", "main", "repo"
+      system "git", "-C", "repo", "-c", "user.name=test", "-c", "user.email=test@example.com",
+             "commit", "-q", "--allow-empty", "-m", "init"
+      system "git", "-C", "repo", "worktree", "add", "-q", "../wt", "-b", "feature"
+      assert_match(/REVIEW\s+1/, shell_output("#{bin}/git-lopper -C #{testpath} scan --no-fetch"))
+      assert_match version.to_s, shell_output("#{bin}/git-lopper --version")

@@ -10,8 +10,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
 
-	"github.com/albertovincenzi/git-lopper/internal/lopper"
-	"github.com/albertovincenzi/git-lopper/internal/ui"
+	"github.com/albertovincenzi/git-lopper/v2/internal/lopper"
+	"github.com/albertovincenzi/git-lopper/v2/internal/ui"
 )
 
 // app holds what every command needs.

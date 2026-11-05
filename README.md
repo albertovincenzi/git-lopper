@@ -12,17 +12,30 @@ linked worktree into one of five classes, and removes only the ones that are saf
 remove — after it checks each one again.
 
 ```
-  ✂  GIT LOPPER  ~/code   ✔ gh ✔ in-use
-  ──────────────────────────────────────────────────────────────────
-  11 worktrees in 2 repos · scanned Thu 05 Nov 07:23
+ ✂ git lopper  ~/code · 21 worktrees in 2 repos · scanned today 11:47 ✔ gh ✔ in-use
 
-  ● PRUNE       2  ██████████████░░░░░░░░  folder already gone, only git metadata left
-  ● SAFE        2  ██████████████░░░░░░░░  clean, HEAD already in the default branch
-  ● LIKELY      2  ██████████████░░░░░░░░  clean, PR merged/closed or remote branch deleted
-  ● KEEP        3  ██████████████████████  changes, unpushed commits or locked
-  ● REVIEW      2  ██████████████░░░░░░░░  open PR, no PR or never pushed
-
-   s  scan    f  fast scan    l  list    c  clean    ?  help    q  quit
+┏━ 1  READY TO REMOVE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8 · 60 KB ━┓
+┃    4  in the default branch  44 KB                                               ┃
+┃    2  PR merged              16 KB                                               ┃
+┃    2  folder already deleted 0 KB                                                ┃
+┃                                                                                  ┃
+┃  ⏎  see the list    c  remove 8 after a check                                    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+╭─ 2  NEEDS YOUR DECISION ───────────────────────────────────────────── 5 · 40 KB ─╮
+│    1  PR open                wait for the merge                                  │
+│    1  commits not pushed     push them, or remove it                             │
+│    3  for 3 more reasons: see the list                                           │
+│                                                                                  │
+│ ⏎ see the list and select                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+╭─ 3  HAS YOUR WORK ─────────────────────────────────────────────────── 8 · 56 KB ─╮
+│    2  changed files          commit, stash or discard                            │
+│    2  commits only here      put them on a branch                                │
+│    4  for 3 more reasons: see the list                                           │
+│                                                                                  │
+│ ⏎ see the list                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+ ↑↓ group  ⏎ open  c remove 8  s scan  f fast scan  ? help  q quit
 ```
 
 - **One scan for many repositories.** Point it at `~/code` and it finds every repository
@@ -38,6 +51,26 @@ remove — after it checks each one again.
 - **One binary.** Written in Go: nothing to install but git, and it checks many
   worktrees in parallel.
 
+## Quickstart
+
+```sh
+brew install albertovincenzi/tap/git-lopper
+cd ~/code        # the folder that holds your repositories
+git lopper       # open the app
+```
+
+1. Press `s` to scan. The scan reads every worktree below the folder and changes nothing.
+2. Read the three groups. **Ready to remove** is selected for you. **Needs your decision**
+   is not: open it and select the worktrees you do not need. **Has your work** is never
+   removed; its list tells you how to save the work.
+3. Press `⏎` to see a list, with the size and the age of each worktree. Press `space` to
+   keep a worktree out of the clean, or to select it.
+4. Press `c`. You see the plan and the space it frees. Press `y` to remove.
+
+The branches stay. `git lopper` never uses `--force`, and it checks each worktree again
+right before it removes it. From a script: `git lopper scan`, then
+`git lopper clean SAFE LIKELY --dry-run`.
+
 ## Install
 
 `git-lopper` is a single binary. Put it anywhere on your `PATH`; git then runs it as
@@ -47,10 +80,14 @@ remove — after it checks each one again.
 brew install albertovincenzi/tap/git-lopper
 ```
 
+Or download the archive for your system from the
+[releases](https://github.com/albertovincenzi/git-lopper/releases), and put `git-lopper`
+on your `PATH`.
+
 With Go 1.26 or later:
 
 ```sh
-go install github.com/albertovincenzi/git-lopper/cmd/git-lopper@latest
+go install github.com/albertovincenzi/git-lopper/v2/cmd/git-lopper@latest
 ```
 
 Or from a clone:

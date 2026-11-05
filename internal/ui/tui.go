@@ -10,7 +10,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/albertovincenzi/git-lopper/internal/lopper"
+	"github.com/albertovincenzi/git-lopper/v2/internal/lopper"
 )
 
 type screen int

@@ -11,7 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/albertovincenzi/git-lopper/internal/lopper"
+	"github.com/albertovincenzi/git-lopper/v2/internal/lopper"
 )
 
 type sortOrder int
