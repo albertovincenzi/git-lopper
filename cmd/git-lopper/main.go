@@ -17,7 +17,7 @@ import (
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
-var version = "2.0.0"
+var version = "2.0.1"
 
 func main() { os.Exit(run(os.Args[1:])) }
 
