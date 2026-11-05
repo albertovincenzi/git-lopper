@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.1.0] - 2026-11-05
 
 ### Added
 
@@ -53,6 +53,6 @@ Version 1 was a bash script. Version 2 is a rewrite in Go.
 - Go unit tests, bats end-to-end tests on real throwaway repositories, CI on Ubuntu
   and macOS.
 
-[Unreleased]: https://github.com/albertovincenzi/git-lopper/compare/v2.0.1...HEAD
+[2.1.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.1.0
 [2.0.1]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.0.1
 [2.0.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.0.0
