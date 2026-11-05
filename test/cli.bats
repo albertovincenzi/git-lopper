@@ -201,3 +201,19 @@ load test_helper
   [ "$status" -eq 2 ]
   contains "unknown agent: notepad"
 }
+
+@test "hidden local edits are KEEP, and the plan lists the ignored files it deletes" {
+  git -C "$W/deps" update-index --assume-unchanged notes.txt
+  echo "local edit" >>"$W/deps/notes.txt"
+  echo .env >>"$(git -C "$WS/api" rev-parse --path-format=absolute --git-common-dir)/info/exclude"
+  echo SECRET=1 >"$W/login/.env"
+  lopper scan
+  [ "$(class_of deps)" = KEEP ]
+  run lopper list --tsv KEEP
+  contains "files hidden from git status"
+  run lopper clean SAFE --dry-run
+  [ "$status" -eq 0 ]
+  contains "files that git ignores, in 1 of them"
+  contains "deletes .env"
+  [ -f "$W/login/.env" ]
+}

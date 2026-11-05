@@ -86,6 +86,9 @@ func (l Look) Plan(steps []lopper.Step) string {
 			st = l.Yellow
 		}
 		fmt.Fprintf(&b, "  %s %-46.46s %s\n", st.Render(fmt.Sprintf("%-7s", s.Action)), s.Reason, l.Grey.Render(Tilde(s.Row.Path)))
+		if len(s.Ignored) > 0 {
+			fmt.Fprintf(&b, "          %s\n", l.Yellow.Render("also deletes "+someOf(s.Ignored, 5)+" (ignored by git)"))
+		}
 	}
 	return b.String()
 }
@@ -114,10 +117,35 @@ func (l Look) PlanSummary(steps []lopper.Step, canSeeProcesses bool) string {
 	for _, why := range reasons {
 		fmt.Fprintf(&b, "    %s  %-34s %4d\n", l.Yellow.Render(l.Pause), "skip: "+why, skips[why])
 	}
+	var holding int
+	var names []string
+	for _, s := range steps {
+		if s.Action != lopper.Skip && len(s.Ignored) > 0 {
+			holding++
+			for _, n := range s.Ignored {
+				if !slices.Contains(names, n) {
+					names = append(names, n)
+				}
+			}
+		}
+	}
+	names = lopper.OrderIgnored(names)
+	if holding > 0 {
+		fmt.Fprintf(&b, "\n    %s\n", l.Yellow.Render(fmt.Sprintf("the removal also deletes files that git ignores, in %d of them: %s",
+			holding, someOf(names, 4))))
+	}
 	if !canSeeProcesses {
 		fmt.Fprintf(&b, "\n    %s\n", l.Red.Render(l.Fail+" lsof or /proc did not work: running sessions cannot be detected"))
 	}
 	return b.String()
+}
+
+// someOf is the first n names, and how many more there are.
+func someOf(names []string, n int) string {
+	if len(names) <= n {
+		return strings.Join(names, ", ")
+	}
+	return fmt.Sprintf("%s +%d more", strings.Join(names[:n], ", "), len(names)-n)
 }
 
 // Result tells what a clean did, with git's errors and the log path.

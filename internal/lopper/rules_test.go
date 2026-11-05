@@ -1,6 +1,7 @@
 package lopper
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -16,6 +17,7 @@ func TestClassify(t *testing.T) {
 		{"work in progress", Facts{Busy: true, Merged: true, Upstream: UpOK, PR: "MERGED", OnRemote: true}, Keep, "rebase or merge in progress"},
 		{"changes", Facts{Dirty: 2, Merged: true, Upstream: UpOK, PR: "MERGED", OnRemote: true}, Keep, "2 changed files"},
 		{"one change", Facts{Dirty: 1, Merged: true, Upstream: UpOK, PR: "MERGED", OnRemote: true}, Keep, "1 changed file"},
+		{"hidden edits", Facts{Hidden: 1, Merged: true, Upstream: UpOK, PR: PRNone}, Keep, "files hidden from git status"},
 		{"unpushed", Facts{Merged: true, Upstream: "[ahead 1, behind 3]", PR: "MERGED", OnRemote: true}, Keep, "unpushed commits"},
 		{"merged", Facts{Merged: true, Upstream: UpOK, PR: PRNone}, Safe, "already in the default branch"},
 		{"merged beats an open PR", Facts{Merged: true, Upstream: UpNone, PR: "OPEN"}, Safe, "already in the default branch"},
@@ -134,4 +136,13 @@ func FuzzParsePorcelain(f *testing.F) {
 			}
 		}
 	})
+}
+
+// Secrets come first, then the files at the top: they matter more than vendor/.
+func TestOrderIgnored(t *testing.T) {
+	got := OrderIgnored([]string{".DS_Store", "notes.txt", "a/b.txt", "scratch/", "vendor/", "storage/oauth-private.key", ".env"})
+	want := []string{"storage/oauth-private.key", ".env", "notes.txt", "scratch/", "vendor/", "a/b.txt"}
+	if !slices.Equal(got, want) {
+		t.Errorf("OrderIgnored() = %v, want %v", got, want)
+	}
 }

@@ -76,6 +76,8 @@ func adviceFor(reason string) advice {
 		return advice{"PR state unknown", "gh auth login, scan again", "without gh, git lopper cannot see the PRs"}
 	case "unpushed commits":
 		return advice{"unpushed commits", "push the branch", "some commits exist only here"}
+	case "files hidden from git status":
+		return advice{"hidden edits", "check them, then unmark them", "edits to files marked assume-unchanged or skip-worktree"}
 	case "rebase or merge in progress":
 		return advice{"rebase or merge", "finish or abort it", "removing it would lose the operation"}
 	case "locked":

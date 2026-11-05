@@ -148,10 +148,14 @@ func TestTUIPlanNeedsWorkToConfirm(t *testing.T) {
 		t.Fatalf("y with nothing to remove: screen %d, want home and no work", m.screen)
 	}
 	m.screen = planScreen
-	m.steps = []lopper.Step{{Action: lopper.Remove, Row: m.saved.Rows[0]}, {Action: lopper.Remove, Row: m.saved.Rows[2]}}
+	m.steps = []lopper.Step{{Action: lopper.Remove, Row: m.saved.Rows[0], Ignored: []string{".env", "vendor/"}},
+		{Action: lopper.Remove, Row: m.saved.Rows[2]}}
 	out := screenText(m)
 	if !strings.Contains(out, "frees 2.0 GB") || !strings.Contains(out, "1 of them you selected") {
 		t.Fatalf("the plan does not show the space and the REVIEW worktree:\n%s", out)
+	}
+	if !strings.Contains(out, "deletes files that git ignores, in 1 of them") || !strings.Contains(out, ".env, vendor/") {
+		t.Fatalf("the plan does not warn about the ignored files:\n%s", out)
 	}
 }
 

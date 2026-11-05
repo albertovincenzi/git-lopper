@@ -17,7 +17,7 @@ removes only the worktrees that are safe to remove. Use its commands below. Do n
 | `SAFE` | No changes, and `HEAD` is already in the default branch. | yes |
 | `LIKELY` | No changes, and the PR is merged or closed, or the remote branch was deleted (a squash merge). | yes |
 | `REVIEW` | An open PR, no PR, never pushed, a detached `HEAD`, or commits that exist only here. | no: the user decides |
-| `KEEP` | Changed files, unpushed commits, a rebase or merge in progress, or a lock. | never |
+| `KEEP` | Changed files, edits hidden from `git status` (assume-unchanged, skip-worktree), unpushed commits, a rebase or merge in progress, or a lock. | never |
 
 ## Steps
 
@@ -59,9 +59,9 @@ removes only the worktrees that are safe to remove. Use its commands below. Do n
 
 ## Rules
 
-- Never run `clean --yes` before the user agrees to the plan of `--dry-run`. Tell the user
-  that a removal also deletes the files that git ignores in the worktree, such as `.env`,
-  `node_modules` and build output.
+- Never run `clean --yes` before the user agrees to the plan of `--dry-run`. A removal also
+  deletes the files that git ignores in the worktree. The plan lists them under each
+  worktree ("also deletes ..."): tell the user, above all about `.env` files, keys and notes.
 - `clean` refuses `KEEP` and `REVIEW`. Do not work around it with
   `git worktree remove --force`, `rm -rf` or a branch deletion.
 - For `REVIEW`, give the user the list with the reasons. To remove some of them, the user

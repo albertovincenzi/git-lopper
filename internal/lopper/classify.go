@@ -37,7 +37,7 @@ func (c Class) Describe() string {
 	case Likely:
 		return "clean, PR merged/closed or remote branch deleted"
 	case Keep:
-		return "changes, unpushed commits, rebase or lock"
+		return "changes, hidden edits, unpushed commits, rebase or lock"
 	case Review:
 		return "open PR, no PR, never pushed or local commits"
 	}
@@ -67,6 +67,7 @@ const (
 type Facts struct {
 	Locked, Busy bool   // Busy: a rebase, merge, cherry-pick, revert or bisect
 	Dirty        int    // changed and untracked files
+	Hidden       int    // tracked files whose edits git status does not show
 	Merged       bool   // HEAD is in the default branch
 	Upstream     string // an Up* value, or git's track text
 	PR           string // MERGED, CLOSED, OPEN, PRNone or PRUnknown
@@ -84,6 +85,8 @@ func Classify(f Facts) (Class, string) {
 		return Keep, "1 changed file"
 	case f.Dirty > 1:
 		return Keep, fmt.Sprintf("%d changed files", f.Dirty)
+	case f.Hidden > 0:
+		return Keep, "files hidden from git status"
 	case strings.Contains(f.Upstream, "ahead"):
 		return Keep, "unpushed commits"
 	case f.Merged:

@@ -22,9 +22,10 @@ const (
 
 // Step is one row of a clean plan.
 type Step struct {
-	Action Action
-	Reason string
-	Row    Row
+	Action  Action
+	Reason  string
+	Row     Row
+	Ignored []string // what git ignores in a worktree to remove: the removal deletes it too
 }
 
 // Decide checks a scanned worktree again, right before clean acts on it.
@@ -76,10 +77,43 @@ func MakePlan(wanted []Class, rows []Row, g Guards, report Progress) []Step {
 	c := &counter{total: len(picked), report: report}
 	forEach(len(picked), func(i int) {
 		action, reason := Decide(wanted, picked[i], g)
-		steps[i] = Step{action, reason, picked[i]}
+		steps[i] = Step{Action: action, Reason: reason, Row: picked[i]}
+		if action == Remove {
+			steps[i].Ignored = Ignored(picked[i].Path)
+		}
 		c.step("checking " + filepath.Base(picked[i].Repo) + " · " + picked[i].Branch)
 	})
 	return steps
+}
+
+// Ignored lists what git ignores in a worktree, as .env, keys or vendor/. git
+// worktree remove deletes it with the worktree. A folder that git ignores whole is
+// one entry.
+func Ignored(wt string) []string {
+	out, err := git(wt, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z")
+	if err != nil {
+		return nil
+	}
+	return OrderIgnored(strings.Split(out, "\x00"))
+}
+
+// OrderIgnored puts what looks like a secret first (.env files, keys), then the
+// files at the top, the folders at the top, and the rest. It leaves out .DS_Store
+// and empty entries.
+func OrderIgnored(list []string) []string {
+	list = slices.DeleteFunc(slices.Clone(list), func(p string) bool { return p == "" || filepath.Base(p) == ".DS_Store" })
+	rank := func(p string) int {
+		if base := filepath.Base(p); strings.HasPrefix(base, ".env") || slices.Contains([]string{".key", ".pem", ".p12"}, filepath.Ext(base)) {
+			return -1
+		}
+		r := 2 * strings.Count(strings.TrimSuffix(p, "/"), "/")
+		if strings.HasSuffix(p, "/") {
+			r++
+		}
+		return r
+	}
+	slices.SortStableFunc(list, func(a, b string) int { return rank(a) - rank(b) })
+	return list
 }
 
 // Todo counts the steps that remove something.

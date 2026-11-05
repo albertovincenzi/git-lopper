@@ -212,7 +212,7 @@ upgrade. Then ask the agent, for example: "which worktrees in ~/code can I remov
 | `PRUNE` | The folder is gone; only git's metadata is left. | `git worktree remove` on that entry only |
 | `SAFE` | No changes, and `HEAD` is already in the default branch. | `git worktree remove` |
 | `LIKELY` | No changes, no unpushed commits, `HEAD` is on a remote branch or in the PR, and the PR is merged or closed, or the remote branch was deleted (typical after a squash merge). | `git worktree remove` |
-| `KEEP` | Uncommitted changes, unpushed commits, a rebase, merge or bisect in progress, or a locked worktree, or a detached `HEAD` whose commits no branch or tag contains. A missing folder is `KEEP` too when the entry is locked, or when its detached `HEAD` is the only reference to its commits. | never |
+| `KEEP` | Uncommitted changes, edits that `git status` hides (`assume-unchanged`, `skip-worktree`), unpushed commits, a rebase, merge or bisect in progress, or a locked worktree, or a detached `HEAD` whose commits no branch or tag contains. A missing folder is `KEEP` too when the entry is locked, or when its detached `HEAD` is the only reference to its commits. | never |
 | `REVIEW` | An open PR, no PR, never pushed, a detached `HEAD`, or a merged PR / deleted remote branch with commits that exist only in this worktree. | only in the app, when you select it; `clean REVIEW` is refused |
 
 The default branch is `origin/HEAD` (or the first of `main`, `master`, `develop`, `trunk`
@@ -242,7 +242,7 @@ locked one.
 - **It shows the plan first.** Nothing is removed before you press `y` or pass `--yes`.
 
 What a removal does delete: files that git **ignores** in that worktree, such as `.env`,
-`node_modules` or build output. Copy what you need first.
+`node_modules` or build output. The plan lists them under each worktree. Copy what you need first.
 
 Each run writes a log to `~/.cache/git-lopper/last-clean.log`.
 

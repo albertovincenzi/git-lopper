@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // detached is the branch name of a worktree with a detached HEAD.
@@ -44,7 +45,7 @@ func Inspect(t Target) (class Class, reason, upstream string) {
 	if err != nil {
 		return Keep, "git status failed", UpDetached
 	}
-	f := Facts{PR: t.PR, Upstream: UpDetached, Dirty: len(lines(status)), Busy: inProgress(t.Path)}
+	f := Facts{PR: t.PR, Upstream: UpDetached, Dirty: len(lines(status)), Hidden: hiddenFiles(t.Path), Busy: inProgress(t.Path)}
 	f.Merged = t.Base != "-" && gitOK(t.Path, "merge-base", "--is-ancestor", "HEAD", t.Base)
 	if t.Branch != detached {
 		f.Upstream, _ = git(t.Path, "for-each-ref",
@@ -82,6 +83,26 @@ func onRemote(dir, commit, prHead string) bool {
 func reachable(dir, commit string, prefixes ...string) bool {
 	out, err := git(dir, append([]string{"for-each-ref", "--contains", commit, "--count=1", "--format=x"}, prefixes...)...)
 	return err == nil && out != ""
+}
+
+// hiddenFiles counts the tracked files whose edits git status does not show: the
+// ones marked assume-unchanged (a lowercase tag), and the ones marked skip-worktree
+// (S) that are on disk. A sparse checkout marks the files it leaves off disk.
+func hiddenFiles(wt string) int {
+	out, err := git(wt, "ls-files", "-v", "-z")
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range strings.Split(out, "\x00") {
+		if len(e) < 3 {
+			continue
+		}
+		if tag := rune(e[0]); unicode.IsLower(tag) || tag == 'S' && exists(filepath.Join(wt, e[2:])) {
+			n++
+		}
+	}
+	return n
 }
 
 // inProgress reports a rebase, merge, cherry-pick, revert or bisect in the worktree.
