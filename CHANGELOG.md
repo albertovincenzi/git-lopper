@@ -18,4 +18,6 @@ project uses [Semantic Versioning](https://semver.org/).
 - A missing folder is removed entry by entry, never with `git worktree prune`; a locked
   entry, or a detached one whose commits exist only there, is `KEEP`.
 - A rebase, merge, cherry-pick, revert or bisect in progress is `KEEP`.
-- Test suite on real throwaway repositories, ShellCheck, CI on Ubuntu and macOS (bash 3.2).
+- A single Go binary for macOS and Linux; it checks up to 8 worktrees in parallel.
+- Go unit tests, bats end-to-end tests on real throwaway repositories, CI on Ubuntu
+  and macOS.

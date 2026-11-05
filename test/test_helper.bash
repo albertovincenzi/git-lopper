@@ -13,8 +13,8 @@ setup() {
   make_fixture "$WS"
 }
 
-# CI puts the macOS /bin/bash 3.2 first on PATH, so this runs the tool with it
-lopper() { bash "$BATS_TEST_DIRNAME/../bin/git-lopper" -C "$WS" "$@"; }
+# the binary that `make build` writes; LOPPER_BIN can point to another one
+lopper() { "${LOPPER_BIN:-$BATS_TEST_DIRNAME/../bin/git-lopper}" -C "$WS" "$@"; }
 
 # bash 3.2 does not fail a test on a false [[ ]], so assert with functions
 contains() { [[ $output == *"$1"* ]] || { printf 'output does not contain: %s\n--\n%s\n' "$1" "$output"; return 1; }; }

@@ -1,23 +1,30 @@
 PREFIX ?= /usr/local
 BATS ?= npx --yes bats@1.13.0
+BIN := bin/git-lopper
 
-.PHONY: test lint install uninstall demo
+.PHONY: build test lint install uninstall demo
 
-test: ## run the test suite
+build: ## build bin/git-lopper
+	go build -o $(BIN) ./cmd/git-lopper
+
+test: build ## unit tests with the race detector, then end-to-end tests on throwaway repositories
+	go test -race ./...
 	$(BATS) test
 
-lint: ## run ShellCheck
-	shellcheck -x bin/git-lopper test/bin/gh
-	shellcheck -s bash test/*.bash
+lint: ## go vet, gofmt and ShellCheck for the test scripts
+	go vet ./...
+	@test -z "$$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
+	shellcheck test/bin/gh
+	shellcheck -s bash test/*.bash test/*.bats
 
-install: ## install git-lopper into $(PREFIX)/bin
+install: build ## install git-lopper into $(PREFIX)/bin
 	install -d "$(DESTDIR)$(PREFIX)/bin"
-	install -m 0755 bin/git-lopper "$(DESTDIR)$(PREFIX)/bin/git-lopper"
+	install -m 0755 $(BIN) "$(DESTDIR)$(PREFIX)/bin/git-lopper"
 
 uninstall:
 	rm -f "$(DESTDIR)$(PREFIX)/bin/git-lopper"
 
-demo: ## open the app on a throwaway set of repositories
+demo: build ## open the app on a throwaway set of repositories
 	@dir=$$(mktemp -d) && bash -c 'source test/fixture.bash && make_fixture "$$1"' _ "$$dir/code" && \
 	FAKE_GH_DIR="$$dir/code/.prs" PATH="$$PWD/test/bin:$$PATH" LOPPER_CACHE_DIR="$$dir/cache" \
-	LOPPER_BLOOM_DB=/nonexistent bin/git-lopper -C "$$dir/code"
+	LOPPER_BLOOM_DB=/nonexistent $(BIN) -C "$$dir/code"

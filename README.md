@@ -33,16 +33,16 @@ remove — after it checks each one again.
   fresh check of each worktree right before it goes. See [Safety](#safety).
 - **Interactive or scriptable.** A colour terminal app, plus `scan`, `list` and `clean`
   commands with `--tsv`, `--dry-run` and `--yes`.
-- **One file, no dependencies.** Plain bash 3.2+ (the macOS default) and git.
+- **One binary.** Written in Go: nothing to install but git, and it checks many
+  worktrees in parallel.
 
 ## Install
 
-`git-lopper` is a single script. Put it anywhere on your `PATH`; git then runs it as
-`git lopper`.
+`git-lopper` is a single binary. Put it anywhere on your `PATH`; git then runs it as
+`git lopper`. With Go 1.26 or later:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/albertovincenzi/git-lopper/main/bin/git-lopper \
-  -o ~/.local/bin/git-lopper && chmod +x ~/.local/bin/git-lopper
+go install github.com/albertovincenzi/git-lopper/cmd/git-lopper@latest
 ```
 
 Or from a clone:
@@ -142,22 +142,26 @@ may break with a Bloom update.
 
 ## Requirements
 
-- bash 3.2 or later, git 2.17 or later (2.31+ to find the repository around the current folder)
+- macOS or Linux, git 2.17 or later (2.31+ to find the repository around the current folder)
 - optional: `gh` for the PR state, `lsof` or `/proc` for the in-use check, `sqlite3` for
-  Bloom, `less` for paging
+  Bloom
 
-CI runs the tests on Ubuntu and on macOS with its bash 3.2.
+Windows is not supported yet: there, `git lopper` cannot see which worktrees are in use.
 
 ## Development
 
 ```sh
-make test    # bats test suite on throwaway repositories (uses npx)
-make lint    # ShellCheck
+make build   # bin/git-lopper
+make test    # Go unit tests (with -race), then the bats end-to-end tests (uses npx)
+make lint    # go vet, gofmt, ShellCheck for the test scripts
 make demo    # open the app on a throwaway set of repositories
 ```
 
-The tests build real repositories with one worktree for each case (see
-[`test/fixture.bash`](test/fixture.bash)) and use a fake `gh`. Issues and pull requests
+The rules are in [`internal/lopper`](internal/lopper), the output and the terminal app
+(built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)) in
+[`internal/ui`](internal/ui). The end-to-end tests run the binary on real repositories
+with one worktree for each case (see [`test/fixture.bash`](test/fixture.bash)) and use a
+fake `gh`. CI runs all tests on Ubuntu and macOS. Issues and pull requests
 are welcome; please add a test for any change to the rules.
 
 ## License

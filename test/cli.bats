@@ -159,4 +159,7 @@ load test_helper
   [ "$status" -eq 2 ]
   run lopper -d x scan
   [ "$status" -eq 2 ]
+  run lopper scan SAFE
+  [ "$status" -eq 2 ]
+  contains "takes no arguments"
 }

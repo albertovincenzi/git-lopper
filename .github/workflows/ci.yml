@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       - run: make lint
 
   test:
@@ -23,13 +26,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
-      # the tests and the tool run with the first bash on PATH: on macOS, make it
-      # the bash 3.2 that ships with the system, not a newer one from Homebrew
-      - name: Use the macOS bash 3.2
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p "$RUNNER_TEMP/bash32"
-          ln -s /bin/bash "$RUNNER_TEMP/bash32/bash"
-          echo "$RUNNER_TEMP/bash32" >>"$GITHUB_PATH"
-      - run: bash --version | head -n 1
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       - run: make test
