@@ -45,7 +45,7 @@ func Inspect(t Target) (class Class, reason, upstream string) {
 	if err != nil {
 		return Keep, "git status failed", UpDetached
 	}
-	f := Facts{PR: t.PR, Upstream: UpDetached, Dirty: len(lines(status)), Hidden: hiddenFiles(t.Path), Busy: inProgress(t.Path)}
+	f := Facts{PR: t.PR, Upstream: UpDetached, Dirty: len(lines(status)), Hidden: hiddenFiles(t.Path), Busy: inProgress(t.Path), Young: movedWithin(t.Path, youngAge, time.Now())}
 	f.Merged = t.Base != "-" && gitOK(t.Path, "merge-base", "--is-ancestor", "HEAD", t.Base)
 	if t.Branch != detached {
 		f.Upstream, _ = git(t.Path, "for-each-ref",
@@ -57,6 +57,7 @@ func Inspect(t Target) (class Class, reason, upstream string) {
 	if doneUpstream(f.PR, f.Upstream) {
 		head, _ := git(t.Path, "rev-parse", "HEAD")
 		f.OnRemote = onRemote(t.Path, head, t.PRHead)
+		f.AfterPR = t.PRHead != "-" && t.PRHead != "" && !inPR(t.Path, head, t.PRHead)
 	}
 	class, reason = Classify(f)
 	// without a branch, a commit that no ref contains is lost with the worktree
@@ -76,7 +77,31 @@ func onRemote(dir, commit, prHead string) bool {
 	if prHead == "-" || prHead == "" {
 		return false
 	}
+	return inPR(dir, commit, prHead)
+}
+
+// inPR reports whether commit is the PR head, or one of its ancestors.
+func inPR(dir, commit, prHead string) bool {
 	return commit == prHead || gitOK(dir, "merge-base", "--is-ancestor", commit, prHead)
+}
+
+// youngAge is how long a worktree on the default branch counts as new.
+const youngAge = 3 * 24 * time.Hour
+
+// movedWithin reports whether HEAD of the worktree moved in the last d: the HEAD
+// reflog changes on a checkout, a commit or a reset, and a new worktree writes it.
+// It reads no git state that a scan changes. An unreadable age is not young.
+func movedWithin(wt string, d time.Duration, now time.Time) bool {
+	gitDir, err := git(wt, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return false
+	}
+	for _, f := range []string{"logs/HEAD", "gitdir"} {
+		if fi, err := os.Stat(filepath.Join(gitDir, f)); err == nil {
+			return now.Sub(fi.ModTime()) < d
+		}
+	}
+	return false
 }
 
 // reachable reports whether a ref (under the given prefixes, or any ref) contains commit.

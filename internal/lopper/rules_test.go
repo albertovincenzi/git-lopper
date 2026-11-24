@@ -1,9 +1,13 @@
 package lopper
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClassify(t *testing.T) {
@@ -26,6 +30,11 @@ func TestClassify(t *testing.T) {
 		{"remote branch deleted", Facts{Upstream: "[gone]", PR: PRNone, OnRemote: true}, Likely, "remote branch deleted"},
 		{"gone, commits only here", Facts{Upstream: "[gone]", PR: PRNone}, Review, "commits not on any remote"},
 		{"merged PR, commits only here", Facts{Upstream: UpNone, PR: "MERGED"}, Review, "commits not on any remote"},
+		{"PR merged, later commits", Facts{Upstream: UpOK, PR: "MERGED", OnRemote: true, AfterPR: true}, Review, "commits after the PR"},
+		{"PR closed, later commits", Facts{Upstream: UpOK, PR: "CLOSED", OnRemote: true, AfterPR: true}, Review, "commits after the PR"},
+		{"new worktree on the default branch", Facts{Merged: true, Young: true, Upstream: UpOK, PR: PRNone}, Review, "new or moved recently"},
+		{"young but dirty stays KEEP", Facts{Merged: true, Young: true, Dirty: 1, Upstream: UpOK}, Keep, "1 changed file"},
+		{"young, PR merged today", Facts{Young: true, Upstream: UpOK, PR: "MERGED", OnRemote: true}, Likely, "PR merged"},
 		{"PR open", Facts{Upstream: UpOK, PR: "OPEN"}, Review, "PR open"},
 		{"never pushed", Facts{Upstream: UpNone, PR: PRNone}, Review, "never pushed"},
 		{"detached", Facts{Upstream: UpDetached, PR: PRNone}, Review, "detached HEAD"},
@@ -144,5 +153,34 @@ func TestOrderIgnored(t *testing.T) {
 	want := []string{"storage/oauth-private.key", ".env", "notes.txt", "scratch/", "vendor/", "a/b.txt"}
 	if !slices.Equal(got, want) {
 		t.Errorf("OrderIgnored() = %v, want %v", got, want)
+	}
+}
+
+func TestMovedWithin(t *testing.T) {
+	wt := t.TempDir()
+	if out, err := exec.Command("git", "-C", wt, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	logHead := filepath.Join(wt, ".git", "logs", "HEAD")
+	if err := os.MkdirAll(filepath.Dir(logHead), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(logHead, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	for _, tt := range []struct {
+		name string
+		age  time.Duration
+		want bool
+	}{{"a day old", 24 * time.Hour, true}, {"a week old", 7 * 24 * time.Hour, false}} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.Chtimes(logHead, now.Add(-tt.age), now.Add(-tt.age)); err != nil {
+				t.Fatal(err)
+			}
+			if got := movedWithin(wt, youngAge, now); got != tt.want {
+				t.Errorf("movedWithin() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

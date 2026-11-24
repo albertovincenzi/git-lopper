@@ -72,6 +72,8 @@ type Facts struct {
 	Upstream     string // an Up* value, or git's track text
 	PR           string // MERGED, CLOSED, OPEN, PRNone or PRUnknown
 	OnRemote     bool   // HEAD is on a remote branch, or in the PR
+	AfterPR      bool   // the PR is done, and HEAD is not in its head: later commits
+	Young        bool   // HEAD moved recently (a new worktree, or a reset)
 }
 
 // Classify applies the rules in order; the first rule that matches wins.
@@ -89,6 +91,9 @@ func Classify(f Facts) (Class, string) {
 		return Keep, "files hidden from git status"
 	case strings.Contains(f.Upstream, "ahead"):
 		return Keep, "unpushed commits"
+	case f.Merged && f.Young:
+		// a new worktree on the default branch has nothing yet, but is about to
+		return Review, "new or moved recently"
 	case f.Merged:
 		return Safe, "already in the default branch"
 	case doneUpstream(f.PR, f.Upstream):
@@ -96,6 +101,8 @@ func Classify(f Facts) (Class, string) {
 		switch {
 		case !f.OnRemote:
 			return Review, "commits not on any remote"
+		case f.AfterPR:
+			return Review, "commits after the PR"
 		case f.PR == "MERGED":
 			return Likely, "PR merged"
 		case f.PR == "CLOSED":

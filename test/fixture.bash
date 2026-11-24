@@ -86,4 +86,6 @@ make_fixture() { # ROOT
   add_wt "$web" feat/peek "$w/peek-branch" && commit "$w/peek-branch" peek && pushed "$w/peek-branch" feat/peek
   git -C "$web" worktree add -q --detach "$w/peek" feat/peek 2>/dev/null
   : >"$root/.prs/web"
+  # a worktree whose HEAD moved in the last days is not SAFE: age them all
+  touch -t 202001010000 "$api"/.git/worktrees/*/logs/HEAD "$web"/.git/worktrees/*/logs/HEAD
 }
