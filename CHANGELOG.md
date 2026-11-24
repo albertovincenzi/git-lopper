@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [2.3.0] - 2026-11-24
+
+### Changed
+
+- A worktree on the default branch whose HEAD moved in the last 3 days is `REVIEW`
+  ("new or moved recently"), not `SAFE`. A new worktree has nothing yet, but its owner
+  is about to use it.
+- A worktree whose PR is merged or closed, but whose HEAD is not in the PR head, is
+  `REVIEW` ("commits after the PR"), not `LIKELY`. A branch name that was used again
+  after the merge no longer looks done.
+
 ## [2.2.0] - 2026-11-05
 
 ### Changed
@@ -69,6 +80,7 @@ Version 1 was a bash script. Version 2 is a rewrite in Go.
 - Go unit tests, bats end-to-end tests on real throwaway repositories, CI on Ubuntu
   and macOS.
 
+[2.3.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.3.0
 [2.2.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.2.0
 [2.1.0]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.1.0
 [2.0.1]: https://github.com/albertovincenzi/git-lopper/releases/tag/v2.0.1
